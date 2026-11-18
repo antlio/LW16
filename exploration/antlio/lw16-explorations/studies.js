@@ -7,6 +7,8 @@ export const groups = [
 
 export const studies = [
   { id: 'city-wheel', title: 'City wheel', group: 'globes', href: '../lw16-city-wheel/', image: 'city-wheel.jpg', color: '#0c0d0d' },
+  { id: 'city-rings', title: 'City rings', group: 'globes', href: '../lw16-city-wheel-rings/', image: 'city-rings.jpg', color: '#0c0d0d' },
+  { id: 'city-vault', title: 'City vault', group: 'globes', href: '../lw16-city-wheel-vault/', image: 'city-vault.jpg', color: '#0c0d0d' },
   { id: 'ticket-scroll', title: 'Ticket scroll', group: 'spatial', href: '../lw16-landing/', image: 'ticket-scroll-smoke.jpg', color: '#f3f1ec' },
   { id: 'poster-gallery', title: 'Posters', group: 'paper', href: '../lw16-hairline-gallery/?exhibit=warehouse&v=captionless', image: 'poster-gallery-clean.jpg', color: '#fafafa' },
   { id: 'card-wall', title: 'Card globe', group: 'paper', href: '../lw16-card-wall/?v=globe', image: 'card-globe.jpg', color: '#fafbf8' },
