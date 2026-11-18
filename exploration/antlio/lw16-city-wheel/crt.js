@@ -46,7 +46,7 @@ const FRAGMENT = /* glsl */ `
   uniform sampler2D uPicture, uLand;
   uniform vec2 uResolution, uHub;
   uniform vec3 uSmall;
-  uniform float uRadius, uRatio, uYaw, uGlow;
+  uniform float uRadius, uRatio, uYaw, uGlow, uSmallOpacity;
   uniform vec2 uCity;
   varying vec2 vUv;
 
@@ -204,7 +204,7 @@ const FRAGMENT = /* glsl */ `
     vec4 glass = globe(px, uHub, uRadius, true);
     color = color * (1. - glass.a) + glass.rgb;
     // the call to action has a small copy of the globe
-    vec4 small = globe(px, uSmall.xy, uSmall.z, false);
+    vec4 small = globe(px, uSmall.xy, uSmall.z, false) * uSmallOpacity;
     color = color * (1. - small.a) + small.rgb;
     // grain in cells of 1.5 CSS pixels. it does not move: grain that moves reads as snow
     // the two globes have no grain, so the glass stays clean
@@ -253,6 +253,7 @@ export const createCrt = (canvas) => {
     resolution: at('uResolution'),
     hub: at('uHub'),
     small: at('uSmall'),
+    smallOpacity: at('uSmallOpacity'),
     radius: at('uRadius'),
     ratio: at('uRatio'),
     yaw: at('uYaw'),
@@ -273,8 +274,9 @@ export const createCrt = (canvas) => {
   gl.uniform1i(at('uLand'), 1)
 
   // hub is the center of the wheel and radius the radius of its globe, in pixels of the picture
-  // small is the center and the radius of the small globe. city is the latitude and the
-  // longitude of the active city in radians, and glow is how strong its light is, from 0 to 1
+  // small is the center and the radius of the small globe, and its opacity, 1 if not given
+  // city is the latitude and the longitude of the active city in radians, and glow is how
+  // strong its light is, from 0 to 1
   const draw = ({ picture, hub, radius, small, ratio, yaw, city, glow }) => {
     gl.viewport(0, 0, canvas.width, canvas.height)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, picture)
@@ -282,6 +284,7 @@ export const createCrt = (canvas) => {
     gl.uniform2f(uniforms.hub, hub.x, canvas.height - hub.y)
     gl.uniform1f(uniforms.radius, radius)
     gl.uniform3f(uniforms.small, small.x, canvas.height - small.y, small.radius)
+    gl.uniform1f(uniforms.smallOpacity, small.opacity ?? 1)
     gl.uniform1f(uniforms.ratio, ratio)
     gl.uniform1f(uniforms.yaw, yaw)
     gl.uniform2f(uniforms.city, ...city)
