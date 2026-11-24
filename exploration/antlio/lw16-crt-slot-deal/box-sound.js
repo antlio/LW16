@@ -39,12 +39,15 @@ const noise = ({ type, from, to = from, delay = 0, ...shape }) => {
   const at = context.currentTime + delay
   const source = context.createBufferSource()
   source.buffer = noiseBuffer
+  // each sound starts at its own place in the noise, so two short sounds are not the same.
+  // the noise plays again from its start, so a sound that starts late in it is not cut
+  source.loop = true
   const filter = context.createBiquadFilter()
   filter.type = type
   filter.frequency.setValueAtTime(from, at)
   filter.frequency.exponentialRampToValueAtTime(to, at + shape.duration)
   source.connect(filter).connect(envelope({ at, ...shape }))
-  source.start(at)
+  source.start(at, Math.random())
   source.stop(at + shape.duration + 0.02)
 }
 
@@ -85,12 +88,30 @@ export const playCardOut = () => {
   tone({ from: 392, to: 294, duration: 0.35, gain: 0.05, attack: 0.02, delay: 0.03 })
 }
 
-// the card is made from light: a soft noise and a low note go up for these seconds, then
-// two soft notes come when the card is all there
-export const playCreate = (seconds) => {
+// the card is made from light. while its cells get there (cellSeconds), short crisp sounds
+// come, as grains that fall on glass. a note comes when the card is made. a soft hit and
+// two notes come when it is still on its side. all the seconds are from now
+export const playCreate = ({ cellSeconds: [firstCell, lastCell], madeSeconds, stillSeconds }) => {
   start()
-  noise({ type: 'bandpass', from: 500, to: 5200, duration: seconds, gain: 0.05, attack: 0.5 })
-  tone({ from: 160, to: 480, duration: seconds, gain: 0.04, attack: 0.4 })
-  tone({ from: 659, duration: 0.9, gain: 0.05, attack: 0.02, delay: seconds - 0.1 })
-  tone({ from: 988, duration: 1.1, gain: 0.04, attack: 0.02, delay: seconds + 0.02 })
+  // the card has too many cells for one sound each, so a grain is for a group of them
+  for (let delay = firstCell; delay < lastCell; delay += 0.012 + Math.random() * 0.03) {
+    const gain = 0.012 + Math.random() * 0.03
+    noise({
+      type: 'highpass',
+      from: 5500 + Math.random() * 5000,
+      duration: 0.012 + Math.random() * 0.012,
+      gain,
+      attack: 0.001,
+      delay,
+    })
+    // some grains have a short high note, as glass has
+    if (Math.random() < 0.3) {
+      tone({ from: 2600 + Math.random() * 3200, duration: 0.035, gain: gain * 0.35, attack: 0.001, delay })
+    }
+  }
+  tone({ from: 659, duration: 0.9, gain: 0.05, attack: 0.02, delay: madeSeconds - 0.1 })
+  // the card is slow at the end of its turn, so the hit is a little before the end
+  tone({ from: 150, to: 75, duration: 0.14, gain: 0.2, delay: stillSeconds - 0.08 })
+  tone({ from: 988, duration: 1.3, gain: 0.045, attack: 0.02, delay: stillSeconds - 0.08 })
+  tone({ from: 1319, duration: 1.5, gain: 0.025, attack: 0.02, delay: stillSeconds + 0.02 })
 }

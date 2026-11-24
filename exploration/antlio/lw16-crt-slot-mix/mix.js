@@ -1,8 +1,8 @@
 // a start is a scene that covers the page. the first one is the start with no choice in the address
 const STARTS = {
   claim: {
-    script: '../lw16-crt-slot-deal/claim.js?v=13',
-    sheet: '../lw16-crt-slot-deal/claim.css?v=4',
+    script: '../lw16-crt-slot-deal/claim.js?v=16',
+    sheet: '../lw16-crt-slot-deal/claim.css?v=5',
   },
   boxreader: {
     script: '../lw16-crt-slot-deal/box3d-screen.js?v=21',

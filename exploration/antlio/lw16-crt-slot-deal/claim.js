@@ -13,8 +13,9 @@ import {
   drawPaperCard,
 } from '../lw16-crt-slot-foil/card3d.js?v=2'
 import { shown } from '../lw16-crt-slot-foil/foil.js?v=3'
+import { FONT } from '../lw16-crt-slot-dots/font.js'
 import { createBloom } from './bloom.js'
-import { playCreate } from './box-sound.js?v=3'
+import { playCreate } from './box-sound.js?v=6'
 
 // the scene is made for a column of 9 to 16. a window that is less wide moves the camera back
 const VIEW = { fov: 28, distance: 8, column: 9 / 16 }
@@ -35,6 +36,13 @@ const LINE = { from: 1.42, to: -0.2 }
 // a particle: how far under its cell it starts, how far to the side and to the window, how
 // long its tail is, how far apart its three colors are, and how much light it has
 const PARTICLE = { under: [0.25, 0.75], side: 0.45, near: [0.05, 0.35], tail: 0.07, apart: 0.005, light: 0.42 }
+// a particle is a square, a small square or a glyph. part is the share of the particles
+// of that kind. size is its size on its way, in parts of a cell
+const KINDS = { small: { part: 0.4, size: 0.4 }, glyph: { part: 0.12, size: 2.6 } }
+const GLYPHS = [...'0123456789LW@*/:']
+// when the card is made, it goes down by a part of its height, and then it turns on its
+// side. the seconds are from the moment it is made. the last sound comes at the end of the turn
+const SETTLE = { down: 0.16, downSeconds: [0, 0.45], turnSeconds: [0.45, 1.3] }
 const isMotionReduced = matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const span = (value, [from, to]) => Math.min(Math.max((value - from) / (to - from), 0), 1)
@@ -45,7 +53,7 @@ dialog.className = 'claim'
 dialog.setAttribute('aria-label', 'Your Launch Week 16 card')
 dialog.innerHTML = `
   <canvas aria-hidden="true"></canvas>
-  <button class="claim-key" type="button" aria-live="polite">Claim your card</button>`
+  <button class="claim-key" type="button">Claim your card</button>`
 document.body.append(dialog)
 const canvas = dialog.querySelector('canvas')
 const claimKey = dialog.querySelector('.claim-key')
@@ -75,6 +83,9 @@ const cutPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0))
 const foil = shown ? createFoilMaterial(shown) : null
 if (foil) {
   foil.uniforms.uLine = line
+  // the ink line at the edge of the card of the page is thinner than a pixel here. it
+  // breaks up when the card turns, so the scene does not draw it
+  foil.fragmentShader = foil.fragmentShader.replace(/float rim = [^;]+;/g, 'float rim = 0.;')
   // a cell that is not there yet is not drawn, and a new cell is white
   foil.fragmentShader = foil.fragmentShader.replace(
     /void main\(\) \{\s*cardMain\(\);/,
@@ -102,8 +113,21 @@ card.children[0].material = card.children[0].material.clone()
 card.children[0].material.clippingPlanes = [cutPlane]
 scene.add(card)
 
-// one particle for each cell: a small square with a tail. each has the column and the row
-// of its cell, and three numbers of its own
+// the dots of the glyphs, one glyph after the other, 5 by 7 each. the first row of the
+// picture is the top row of a glyph
+const glyphDots = new Uint8Array(GLYPHS.length * 5 * 7)
+for (const [index, char] of GLYPHS.entries()) {
+  for (const [row, bits] of FONT[char].entries()) {
+    for (let column = 0; column < 5; column++) {
+      if (bits & (16 >> column)) glyphDots[(row * GLYPHS.length + index) * 5 + column] = 255
+    }
+  }
+}
+const glyphPicture = new THREE.DataTexture(glyphDots, GLYPHS.length * 5, 7, THREE.RedFormat)
+glyphPicture.needsUpdate = true
+
+// one particle for each cell: a square with a tail, a small square with a short tail, or a
+// glyph with no tail. each has the column and the row of its cell, and four numbers of its own
 const particleShape = new THREE.InstancedBufferGeometry()
 particleShape.setAttribute(
   'position',
@@ -122,7 +146,7 @@ particleShape.setAttribute(
 )
 particleShape.setAttribute(
   'aSeed',
-  new THREE.InstancedBufferAttribute(Float32Array.from({ length: cellCount * 3 }, Math.random), 3)
+  new THREE.InstancedBufferAttribute(Float32Array.from({ length: cellCount * 4 }, Math.random), 4)
 )
 particleShape.instanceCount = cellCount
 // the particles are drawn three times, in red, green and blue, a little apart. they are
@@ -141,14 +165,21 @@ const particles = [
       transparent: true,
       // a particle that goes to the side has its shape turned over, so its two sides are drawn
       side: THREE.DoubleSide,
-      uniforms: { uLine: line, uApart: { value: apart }, uColor: { value: new THREE.Color(color) } },
+      uniforms: {
+        uLine: line,
+        uApart: { value: apart },
+        uColor: { value: new THREE.Color(color) },
+        uGlyphs: { value: glyphPicture },
+      },
       vertexShader: /* glsl */ `
         attribute vec2 aCell;
-        attribute vec3 aSeed;
+        attribute vec4 aSeed;
         uniform float uLine;
         uniform float uApart;
         varying float vLight;
-        varying float vAlong;
+        varying vec2 vAt;
+        varying float vGlyph;
+        varying float vFull;
         ${LANDING}
         void main() {
           // way is 0 when the particle starts and 1 when it is at its cell. a particle is
@@ -169,25 +200,47 @@ const particles = [
           // fast at first, then slow near its cell
           vec3 here = mix(start, cell, 1. - pow(1. - way, 3.));
           here.x += sin(way * 6. + aSeed.z * 40.) * .03 * (1. - way);
-          // the square is as large as a cell when it gets there, and its tail has no length then
-          vec2 along = normalize(cell.xy - start.xy);
-          float size = ${(CARD.w / CELLS.columns / 2).toFixed(5)} * mix(.35, 1., way);
-          float tail = pow(1. - way, 1.5) * ${PARTICLE.tail.toFixed(2)};
+          float isGlyph = step(aSeed.w, ${KINDS.glyph.part.toFixed(2)});
+          float isSmall = step(aSeed.w, ${(KINDS.glyph.part + KINDS.small.part).toFixed(2)}) - isGlyph;
+          // each kind is as large as a cell when it gets there, and its tail has no length
+          // then. the small square and the glyph keep their size until they are near the cell
+          vFull = smoothstep(.7, 1., way);
+          float grow = mix(.35, 1., way);
+          grow = mix(grow, mix(${KINDS.small.size.toFixed(2)}, 1., vFull), isSmall);
+          grow = mix(grow, mix(${KINDS.glyph.size.toFixed(2)}, 1., vFull), isGlyph);
+          float size = ${(CARD.w / CELLS.columns / 2).toFixed(5)} * grow;
+          float tail = pow(1. - way, 1.5) * ${PARTICLE.tail.toFixed(2)} * (1. - isGlyph) * (1. - isSmall * .5);
+          // a glyph does not turn with its way, so it reads
+          vec2 along = mix(normalize(cell.xy - start.xy), vec2(0., 1.), isGlyph);
           here.xy += vec2(along.y, -along.x) * size * position.x
             + along * (position.y > 0. ? size : -size - tail)
             + vec2(uApart * (1. - way), 0.);
           vLight = isOn * smoothstep(0., .2, way) * (.4 + aSeed.y);
-          vAlong = position.y;
+          vAt = position.xy;
+          vGlyph = isGlyph > 0. ? floor(aSeed.w / ${KINDS.glyph.part.toFixed(2)} * ${GLYPHS.length}.) : -1.;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(here, 1.);
         }
       `,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
+        uniform sampler2D uGlyphs;
         varying float vLight;
-        varying float vAlong;
+        varying vec2 vAt;
+        varying float vGlyph;
+        varying float vFull;
         void main() {
           // the tail has less light than the square
-          float light = vLight * mix(.1, 1., smoothstep(-1., .3, vAlong));
+          float light = vLight * mix(.1, 1., smoothstep(-1., .3, vAt.y));
+          if (vGlyph >= 0.) {
+            // the glyph is in the middle 5 columns of a square of 7 by 7 dots. the square
+            // is full when the glyph is at its cell
+            vec2 pixel = min(floor((vAt * .5 + .5) * 7.), 6.) - vec2(1., 0.);
+            float ink = pixel.x < 0. || pixel.x > 4. ? 0. : texture2D(
+              uGlyphs,
+              vec2((vGlyph * 5. + pixel.x + .5) / ${GLYPHS.length * 5}., 1. - (pixel.y + .5) / 7.)
+            ).r;
+            light = vLight * mix(ink, 1., vFull);
+          }
           gl_FragColor = vec4(uColor * light * ${PARTICLE.light.toFixed(1)}, 1.);
         }
       `,
@@ -227,15 +280,18 @@ const draw = (now) => {
   const since = isMotionReduced ? 99 : seconds - stepAt
   const made = step === 'wait' ? 0 : step === 'make' ? span(since, MAKE_SECONDS) : 1
 
+  const settleSeconds = step === 'ready' ? since : 0
   cardPlace.copy(PLACE)
-  cardPlace.y += Math.sin(seconds * 0.9) * 0.012
+  cardPlace.y +=
+    Math.sin(seconds * 0.9) * 0.012 - SETTLE.down * ease(span(settleSeconds, SETTLE.downSeconds))
   card.position.copy(cardPlace)
-  // the card turns to the window and comes up from its lean as it is made
+  // the card turns to the window and comes up from its lean as it is made. its print is on
+  // its side, so the card turns on its side when it is made, and the print reads
   const turned = ease(made)
   card.rotation.set(
     0,
     TURN.yaw * (1 - turned) + Math.sin(seconds * 0.5) * 0.08 * turned,
-    TURN.roll * (1 - turned)
+    TURN.roll * (1 - turned) + (Math.PI / 2) * ease(span(settleSeconds, SETTLE.turnSeconds))
   )
 
   line.value = LINE.from + (LINE.to - LINE.from) * made
@@ -249,10 +305,7 @@ const draw = (now) => {
       .add(cardPlace)
   )
 
-  if (step === 'make') {
-    claimKey.textContent = `Making your card ${Math.round(made * 100)}%`
-    if (made === 1) show('ready')
-  }
+  if (step === 'make' && made === 1) show('ready')
 
   if (foil) {
     // the light of the foil is under the pointer after its first move
@@ -278,18 +331,27 @@ const show = (next) => {
   step = next
   stepAt = performance.now() / 1000
   if (step !== 'ready') return
-  // the key goes away, and the card is the last thing. a press on it does nothing
-  claimKey.dataset.done = ''
-  claimKey.inert = true
+  // the card is the last thing. a press on it does nothing
   canvas.removeAttribute('aria-hidden')
   canvas.setAttribute('role', 'img')
   canvas.setAttribute('aria-label', 'Your Launch Week 16 card')
 }
 
 claimKey.addEventListener('click', () => {
-  if (step !== 'wait') return
-  claimKey.setAttribute('aria-disabled', 'true')
-  playCreate(MAKE_SECONDS[1])
+  // the key goes away at the press, so it takes no second press
+  claimKey.dataset.done = ''
+  claimKey.inert = true
+  const secondsWhenLineIsAt = (place) =>
+    MAKE_SECONDS[0] +
+    ((LINE.from - place) / (LINE.from - LINE.to)) * (MAKE_SECONDS[1] - MAKE_SECONDS[0])
+  playCreate({
+    cellSeconds: [
+      secondsWhenLineIsAt(1 + CELLS.spread / 2),
+      secondsWhenLineIsAt(-CELLS.spread / 2),
+    ],
+    madeSeconds: MAKE_SECONDS[1],
+    stillSeconds: MAKE_SECONDS[1] + SETTLE.turnSeconds[1],
+  })
   show('make')
 })
 canvas.addEventListener('pointermove', (event) => {
@@ -304,5 +366,8 @@ dialog.addEventListener('cancel', (event) => event.preventDefault())
 addEventListener('resize', resize)
 
 dialog.showModal()
+// the dialog gives the focus to the key, and the key then has a ring before any key press.
+// with no focus, the first Tab goes to the key
+claimKey.blur()
 resize()
 requestAnimationFrame(draw)
