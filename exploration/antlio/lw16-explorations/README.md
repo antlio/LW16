@@ -1,8 +1,8 @@
 # LW16 exploration gallery
 
-Open `/lw16-explorations/` to browse the thirteen selected studies. The folder root sends you to this gallery.
+Open `/lw16-explorations/` to browse the fourteen selected studies. The folder root sends you to this gallery.
 
-Each card has a captured image, a short name, a native preview button, and an icon link to the full page. Category pills cover spatial studies, globes, and posters. The visible interface contains only the page heading, filter labels, and thirteen study names. Selecting a preview opens the actual study in a native dialog. Only one iframe is mounted at a time, and closing the dialog removes it. Previous and next controls follow the current category. Escape closes the dialog and returns focus to its originating card.
+Each card has a captured image, a short name, a native preview button, and an icon link to the full page. Category pills cover spatial studies, globes, and posters. The visible interface contains only the page heading, filter labels, and fourteen study names. Selecting a preview opens the actual study in a native dialog. Only one iframe is mounted at a time, and closing the dialog removes it. Previous and next controls follow the current category. Escape closes the dialog and returns focus to its originating card.
 
 The category and selected preview are reflected in `?group=` and `?study=`.
 
@@ -30,4 +30,4 @@ Ticket scroll is the landing journey: everyone's tickets as a spine, rings and a
 
 Tickets, Glyphs and Table globe have no text on the page, only the drawing.
 
-Card from light and Card box are two ways to give a person the LW16 card, both in `../lw16-crt-slot-mix/`. In Card from light, a press on "Claim your card" makes the card from particles, top to bottom, and the card then stays in the scene. In Card box, a press opens a box whose lid is a reader: the person drags the card from its pocket into the slot, and the screen comes on. The card is the white card on its side, with its foil under the pointer.
+Card from light and the two card boxes are ways to give a person the LW16 card, all in `../lw16-crt-slot-mix/`. In Card from light, a press on "Claim your card" makes the card from particles, top to bottom, and the card then stays in the scene. In Card box, a press opens a box whose lid is a reader: the person drags the card from its pocket into the slot, and the screen comes on. In Card box, screen under, the lid has only the slot, and the screen is under the card in its pocket. The card is the white card on its side, with its foil under the pointer.

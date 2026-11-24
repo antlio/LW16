@@ -34,6 +34,9 @@ const PLACES = {
 }
 // the seconds after the box opens
 const TIMES = { lid: [0, 1.1], light: [0.3, 1.1] }
+// with "under" in its address, the lid has only the slot, in the middle of the cell of the
+// mark. the screen is then the floor of the pocket, so the card is on it
+const isScreenUnder = new URL(import.meta.url).searchParams.has('under')
 // the screen is the cell of the mark on the inner side of the lid: only glass, with pad of
 // paper around it. bulge is how round the glass is. picture is the size of what it shows,
 // in pixels
@@ -76,11 +79,13 @@ const MARK_CELL = {
   w: (TABLE.columns[TABLE.mark.columns[1]] - TABLE.columns[TABLE.mark.columns[0]]) * BOX.side,
   h: ((TABLE.mark.rows[1] - TABLE.mark.rows[0]) / TABLE.rows) * BOX.side,
 }
-// the glass is at the top of the cell, so the paper under it has room for the slot
-const GLASS = { w: MARK_CELL.w - SCREEN.pad * 2, h: (MARK_CELL.w - SCREEN.pad * 2) / SCREEN.ratio }
+// the glass under the card is a little less wide than the card, so the card covers it
+const GLASS_WIDTH = isScreenUnder ? CARD.h - 0.04 : MARK_CELL.w - SCREEN.pad * 2
+const GLASS = { w: GLASS_WIDTH, h: GLASS_WIDTH / SCREEN.ratio }
+// in the lid, the glass is at the top of the cell, so the paper under it has room for the slot
 GLASS.y = MARK_CELL.y + MARK_CELL.h / 2 - SCREEN.pad - GLASS.h / 2
 // the mouth of the slot, up from the hinge
-const SLOT_MOUTH = GLASS.y - GLASS.h / 2 - SLOT.under
+const SLOT_MOUTH = isScreenUnder ? MARK_CELL.y : GLASS.y - GLASS.h / 2 - SLOT.under
 // the mark takes a press this far from the middle of the lid, in parts of its width
 const MARK_REACH = 0.15
 // the foil of the print of the note: how many times its colors go around in the width of the
@@ -89,7 +94,7 @@ const NOTE_FOIL = { bands: 2.4, color: 0.7 }
 // the light goes over the closed box once in this many seconds
 const SWEEP_SECONDS = 4.2
 const SKY_LIGHT = 0.32
-const LIGHTS = { key: 11, under: 2.5, top: 28, sweep: 1.6, mark: 1.2, open: 0.25 }
+const LIGHTS = { key: 11, under: 2.5, top: 28, sweep: 1.6, mark: 1.2, open: 0.25, arrow: 1.8 }
 const pageCard = document.getElementById('card')
 const isMotionReduced = matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -188,11 +193,11 @@ const drawTable = ({ ctx, line, ink, shade }) => {
   ctx.restore()
 }
 
-// the paper of the two sides of the lid goes from yellow to green
+// the paper of the two sides of the lid is black, with a little more light at one corner
 const fillPaper = (ctx) => {
   const paper = ctx.createLinearGradient(0, 0, LID_SIZE, LID_SIZE)
-  paper.addColorStop(0, '#5d5c22')
-  paper.addColorStop(1, '#2a4e31')
+  paper.addColorStop(0, '#222223')
+  paper.addColorStop(1, '#111112')
   ctx.fillStyle = paper
   ctx.fillRect(0, 0, LID_SIZE, LID_SIZE)
 }
@@ -201,7 +206,7 @@ const lidColor = paint({
   w: LID_SIZE,
   draw: (ctx) => {
     fillPaper(ctx)
-    drawTable({ ctx, line: 2, ink: 'rgb(214 218 180 / 0.26)', shade: 'rgb(255 255 255 / 0.05)' })
+    drawTable({ ctx, line: 2, ink: 'rgb(226 226 220 / 0.2)', shade: 'rgb(255 255 255 / 0.05)' })
     strokeMark({
       ctx,
       x: LID_SIZE / 2,
@@ -256,6 +261,21 @@ const fillSlot = (ctx, ink) => {
   ctx.fill()
 }
 
+// one arrow of small squares points down at the slot, in the middle of the paper over it.
+// the lid with only the slot has it. it is pressed into the paper, and it is a light with
+// the card in
+const fillArrow = (ctx, ink) => {
+  ctx.fillStyle = ink
+  const middle = (1 - (SLOT_MOUTH + MARK_CELL.h / 4) / BOX.side) * LID_SIZE
+  for (let row = 0; row < 4; row++) {
+    // the last row is the point, and each row over it is one square more to each side
+    const out = 3 - row
+    for (const side of out ? [-1, 1] : [0]) {
+      ctx.fillRect(LID_SIZE / 2 + side * out * 20 - 5, middle + (row - 1.5) * 20 - 5, 10, 10)
+    }
+  }
+}
+
 // the inner side of the lid is the paper of its outer side. it is seen from its other side
 // when the lid is open, so its picture is drawn turned
 const lidInside = paint({
@@ -273,6 +293,18 @@ const lidInside = paint({
     ctx.fillStyle = fall
     ctx.fillRect(0, 0, LID_SIZE, LID_SIZE)
     fillSlot(ctx, '#050505')
+    if (isScreenUnder) fillArrow(ctx, 'rgb(0 0 0 / 0.5)')
+  },
+})
+
+const lidInsideGlow = paint({
+  w: LID_SIZE,
+  draw: (ctx) => {
+    ctx.fillStyle = '#000'
+    ctx.fillRect(0, 0, LID_SIZE, LID_SIZE)
+    ctx.translate(LID_SIZE, LID_SIZE)
+    ctx.rotate(Math.PI)
+    if (isScreenUnder) fillArrow(ctx, '#fff')
   },
 })
 
@@ -284,28 +316,31 @@ const lidInsideHeight = paint({
     ctx.translate(LID_SIZE, LID_SIZE)
     ctx.rotate(Math.PI)
     drawTable({ ctx, line: 3, ink: '#707070', shade: '#9a9a9a' })
-    // the cell of the screen is a little lower than the paper, so the glass is in the lid
-    ctx.fillStyle = '#8a8a8a'
-    ctx.fillRect(
-      (MARK_CELL.x / BOX.side + 0.5) * LID_SIZE - (MARK_CELL.w / BOX.side / 2) * LID_SIZE,
-      (TABLE.mark.rows[0] / TABLE.rows) * LID_SIZE,
-      (MARK_CELL.w / BOX.side) * LID_SIZE,
-      (MARK_CELL.h / BOX.side) * LID_SIZE
-    )
-    // the paper comes up to the glass with no hard step, as the frame of a tube does:
-    // lines of less and less width, one on the other, make a soft slope
-    ctx.strokeStyle = 'rgb(255 255 255 / 0.09)'
-    ctx.beginPath()
-    ctx.roundRect(
-      ((MARK_CELL.x - GLASS.w / 2) / BOX.side + 0.5) * LID_SIZE,
-      (1 - (GLASS.y + GLASS.h / 2) / BOX.side) * LID_SIZE,
-      (GLASS.w / BOX.side) * LID_SIZE,
-      (GLASS.h / BOX.side) * LID_SIZE,
-      (SCREEN.radius / BOX.side) * LID_SIZE
-    )
-    for (let width = 48; width > 0; width -= 8) {
-      ctx.lineWidth = width
-      ctx.stroke()
+    if (isScreenUnder) fillArrow(ctx, '#000')
+    else {
+      // the cell of the screen is a little lower than the paper, so the glass is in the lid
+      ctx.fillStyle = '#8a8a8a'
+      ctx.fillRect(
+        (MARK_CELL.x / BOX.side + 0.5) * LID_SIZE - (MARK_CELL.w / BOX.side / 2) * LID_SIZE,
+        (TABLE.mark.rows[0] / TABLE.rows) * LID_SIZE,
+        (MARK_CELL.w / BOX.side) * LID_SIZE,
+        (MARK_CELL.h / BOX.side) * LID_SIZE
+      )
+      // the paper comes up to the glass with no hard step, as the frame of a tube does:
+      // lines of less and less width, one on the other, make a soft slope
+      ctx.strokeStyle = 'rgb(255 255 255 / 0.09)'
+      ctx.beginPath()
+      ctx.roundRect(
+        ((MARK_CELL.x - GLASS.w / 2) / BOX.side + 0.5) * LID_SIZE,
+        (1 - (GLASS.y + GLASS.h / 2) / BOX.side) * LID_SIZE,
+        (GLASS.w / BOX.side) * LID_SIZE,
+        (GLASS.h / BOX.side) * LID_SIZE,
+        (SCREEN.radius / BOX.side) * LID_SIZE
+      )
+      for (let width = 48; width > 0; width -= 8) {
+        ctx.lineWidth = width
+        ctx.stroke()
+      }
     }
     fillSlot(ctx, '#000')
     addGrain(ctx, 16)
@@ -407,26 +442,25 @@ const velvetHeight = paint({
 })
 
 // the note is a short label, in the pixels of the picture of the sheet: one line of small
-// print, a bar code, a line, and the note
+// print, a bar code, and the note
 const NOTE = { left: 92, right: 932, ink: '#e8e4da' }
 
 const drawNote = (ctx) => {
   const { left, right, ink } = NOTE
   ctx.fillStyle = ink
   ctx.font = '600 20px ui-monospace, Menlo, monospace'
-  ctx.fillText('SUPABASE / LW-16', left, 104)
+  ctx.fillText('SUPABASE', left, 104)
   // the bars are thin at the left and wide at the right, and a space is as wide as its bar
   for (let bar = 0, x = 690; x < right; bar++) {
     const width = Math.min(2 + bar * 0.28, right - x)
     ctx.fillRect(x, 70, width, 42)
     x += width * 2
   }
-  ctx.fillRect(left, 136, right - left, 2)
   ctx.font = 'italic 500 64px Georgia, "Times New Roman", serif'
-  ctx.fillText('Launch Week 16', left, 228)
-  ctx.font = '400 36px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif'
-  ctx.fillText('One launch a day, from 6 to 10 December.', left, 294)
-  ctx.fillText('Put this card in the reader to see each one.', left, 344)
+  ctx.fillText('LW16', left, 212)
+  ctx.font = '400 32px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif'
+  ctx.fillText('One launch a day, 6 to 10 December.', left, 272)
+  ctx.fillText('Put the card in the reader.', left, 316)
 }
 
 const sheetColor = paint({
@@ -457,9 +491,9 @@ document.body.append(dialog)
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(VIEW.fov, 1, 0.1, 50)
-const bloom = createBloom(renderer, { haze: [0.012, 0.0025, 0.0015] })
+const bloom = createBloom(renderer, { haze: [0.011, 0.009, 0.002] })
 
-renderer.setClearColor(0x070101)
+renderer.setClearColor(0x060501)
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
@@ -490,7 +524,7 @@ const paperBump = textureOf(paperHeight, false)
 paperBump.wrapS = paperBump.wrapT = THREE.RepeatWrapping
 paperBump.repeat.set(4, 4)
 const shell = new THREE.MeshStandardMaterial({
-  color: 0x3d4a25,
+  color: 0x18181a,
   roughness: 0.85,
   bumpMap: paperBump,
   bumpScale: 0.3,
@@ -520,6 +554,9 @@ const lidBack = new THREE.MeshStandardMaterial({
   bumpMap: textureOf(lidInsideHeight, false),
   bumpScale: 3,
   roughness: 0.7,
+  emissive: 0x3ecf8e,
+  emissiveMap: textureOf(lidInsideGlow),
+  emissiveIntensity: 0,
 })
 
 const solid = (geometry, material) => {
@@ -653,10 +690,10 @@ const drawPocketArt = (ctx) => {
   }
   fillMark({ x: disk.x, y: row, size: 40 })
 
-  const label = { y: height * 0.68, w: 300, h: 48 }
+  const label = { y: height * 0.68, w: 160, h: 48 }
   ctx.beginPath()
   ctx.roundRect(width / 2 - label.w / 2, label.y - label.h / 2, label.w, label.h, label.h / 2)
-  const globeX = width / 2 - 112
+  const globeX = width / 2 - 42
   ctx.moveTo(globeX + 12, label.y)
   ctx.arc(globeX, label.y, 12, 0, Math.PI * 2)
   ctx.moveTo(globeX + 5, label.y)
@@ -665,10 +702,11 @@ const drawPocketArt = (ctx) => {
   ctx.lineTo(globeX + 12, label.y)
   ctx.stroke()
   ctx.font = '500 22px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif'
-  ctx.fillText('Launch Week 16', width / 2 + 16, label.y + 1)
+  ctx.fillText('LW16', width / 2 + 16, label.y + 1)
 }
 
-// the floor of the pocket is darker velvet. its drawing shows when the card is out
+// the floor of the pocket is darker velvet. its drawing shows when the card is out. a floor
+// that is the screen has no drawing
 const pocketColor = paint({
   w: LID_SIZE,
   h: Math.round((LID_SIZE * pocketSize.h) / pocketSize.w),
@@ -676,6 +714,7 @@ const pocketColor = paint({
     ctx.drawImage(velvetColor, 0, 0)
     ctx.fillStyle = 'rgb(0 0 0 / 0.5)'
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+    if (isScreenUnder) return
     // the drawing is made larger from the middle, so it has less room around it
     ctx.translate(ctx.canvas.width / 2, ctx.canvas.height / 2)
     ctx.scale(1.2, 1.2)
@@ -880,7 +919,13 @@ const glass = new THREE.Mesh(
     `,
   })
 )
-glass.position.set(MARK_CELL.x, GLASS.y, 0.0008)
+if (isScreenUnder) {
+  glass.position.set(0, POCKET.y, sheetTop - SHEET.pocket + 0.0008)
+  box.add(glass)
+} else {
+  glass.position.set(MARK_CELL.x, GLASS.y, 0.0008)
+  reader.add(glass)
+}
 // this plane has no color. it is in front of the part of the card that is in the slot, and
 // it is drawn before the card, so that part does not show
 const slotCover = new THREE.Mesh(
@@ -889,7 +934,7 @@ const slotCover = new THREE.Mesh(
 )
 slotCover.position.set(0, SLOT_MOUTH + slotCover.geometry.parameters.height / 2, 0.03)
 slotCover.renderOrder = 1
-reader.add(glass, slotCover)
+reader.add(slotCover)
 hinge.add(lid, reader)
 box.add(floor, ...walls, sheet, pocketFloor, cutFloor, ...tabs, hinge)
 scene.add(box)
@@ -1058,6 +1103,7 @@ const draw = (now) => {
     else playCardOut()
   }
   glow.screen += ((isReaderOn ? 1 : 0) - glow.screen) * HOVER.speed
+  lidBack.emissiveIntensity = LIGHTS.arrow * glow.screen
   if (step === 'open') {
     drawScreen({ seconds, on: glow.screen, isCardIn: isReaderOn })
     screenTexture.needsUpdate = true
@@ -1095,9 +1141,8 @@ const draw = (now) => {
   }
 
   bloom.render(scene, camera)
-  frame = requestAnimationFrame(draw)
+  requestAnimationFrame(draw)
 }
-let frame = 0
 
 // the scene has no text. the canvas is its one control, and its name is what Enter does
 const nameScene = () => {
@@ -1120,19 +1165,6 @@ const openBox = () => {
   hovered = null
   canvas.style.cursor = ''
   nameScene()
-}
-
-// Escape closes the scene, and the page is under it
-const finish = () => {
-  cancelAnimationFrame(frame)
-  dialog
-    .animate({ opacity: [1, 0] }, { duration: isMotionReduced ? 1 : 450, fill: 'forwards' })
-    .finished.then(() => {
-      dialog.close()
-      dialog.remove()
-      renderer.dispose()
-      pageCard.focus()
-    })
 }
 
 canvas.addEventListener('pointerdown', (event) => {
@@ -1185,13 +1217,11 @@ canvas.addEventListener('keydown', (event) => {
   isSeatWanted = !isSeatWanted
   nameScene()
 })
-dialog.addEventListener('cancel', (event) => {
-  event.preventDefault()
-  finish()
-})
+// the page under the scene does not show, so Escape does not close the scene
+dialog.addEventListener('cancel', (event) => event.preventDefault())
 addEventListener('resize', resize)
 
 dialog.showModal()
 resize()
 nameScene()
-frame = requestAnimationFrame(draw)
+requestAnimationFrame(draw)
