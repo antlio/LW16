@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && cp -r exploration dist/exploration",
     "preview": "vite preview",
     "typecheck:api": "tsc -p api/tsconfig.json --noEmit"
   },
