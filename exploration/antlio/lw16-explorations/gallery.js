@@ -1,4 +1,4 @@
-import { groups, studies } from './studies.js?v=24'
+import { groups, studies } from './studies.js?v=31'
 
 const grid = document.querySelector('#studies')
 const filters = document.querySelector('#filters')
@@ -77,7 +77,10 @@ function openPreview(study, trigger = null) {
   stage.style.backgroundImage = `url("./previews/${study.image}")`
   const frame = document.createElement('iframe')
   frame.title = `${study.title} interactive preview`
-  frame.src = study.href
+  // the local server lets the browser keep old pages, so each preview asks for a new copy
+  const src = new URL(study.href, location.href)
+  src.searchParams.set('fresh', Date.now())
+  frame.src = src
   frame.addEventListener('load', () => {
     if (!frame.isConnected || active !== study) return
     frame.classList.add('loaded')

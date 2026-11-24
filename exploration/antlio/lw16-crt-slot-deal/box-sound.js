@@ -13,13 +13,13 @@ const start = () => {
   for (let index = 0; index < samples.length; index++) samples[index] = Math.random() * 2 - 1
 }
 
-// the sound goes up to gain in attack seconds, then down to nothing
-const envelope = ({ at, gain, attack = 0.005, duration }) => {
+// the sound goes up to gain in attack seconds, then down to nothing. out is where it goes
+const envelope = ({ at, gain, attack = 0.005, duration, out = context.destination }) => {
   const amp = context.createGain()
   amp.gain.setValueAtTime(0.0001, at)
   amp.gain.exponentialRampToValueAtTime(gain, at + attack)
   amp.gain.exponentialRampToValueAtTime(0.0001, at + duration)
-  amp.connect(context.destination)
+  amp.connect(out)
   return amp
 }
 
@@ -60,6 +60,13 @@ export const playKnock = (landSeconds) => {
   tone({ from: 110, to: 60, duration: 0.09, gain: 0.14, delay: landSeconds })
 }
 
+// the lid comes down on the box, with no person who does it: one soft hit
+export const playClose = () => {
+  start()
+  noise({ type: 'lowpass', from: 900, to: 260, duration: 0.07, gain: 0.3 })
+  tone({ from: 120, to: 62, duration: 0.1, gain: 0.22 })
+}
+
 // the lid comes off the box, its paper moves, and three soft notes come with the light
 export const playOpen = () => {
   start()
@@ -88,30 +95,69 @@ export const playCardOut = () => {
   tone({ from: 392, to: 294, duration: 0.35, gain: 0.05, attack: 0.02, delay: 0.03 })
 }
 
-// the card is made from light. while its cells get there (cellSeconds), short crisp sounds
-// come, as grains that fall on glass. a note comes when the card is made. a soft hit and
-// two notes come when it is still on its side. all the seconds are from now
-export const playCreate = ({ cellSeconds: [firstCell, lastCell], madeSeconds, stillSeconds }) => {
+// the card is made from light. from now until the card is made, short crisp sounds
+// come, as grains that fall on glass. wind comes while the light of the foil goes up the
+// card (shineSeconds). a lower move of air comes while the card turns on its side
+// (turnSeconds). all the seconds are from now. gap is the time between two grains, in parts
+// of its first value. the result stops the sound
+export const playCreate = ({ madeSeconds, shineSeconds, turnSeconds, volume, gap }) => {
   start()
-  // the card has too many cells for one sound each, so a grain is for a group of them
-  for (let delay = firstCell; delay < lastCell; delay += 0.012 + Math.random() * 0.03) {
-    const gain = 0.012 + Math.random() * 0.03
-    noise({
-      type: 'highpass',
-      from: 5500 + Math.random() * 5000,
-      duration: 0.012 + Math.random() * 0.012,
-      gain,
-      attack: 0.001,
-      delay,
-    })
-    // some grains have a short high note, as glass has
-    if (Math.random() < 0.3) {
-      tone({ from: 2600 + Math.random() * 3200, duration: 0.035, gain: gain * 0.35, attack: 0.001, delay })
+  const out = context.createGain()
+  out.gain.value = volume
+  out.connect(context.destination)
+  // with no press on the page, the browser keeps the sound off until a press. the sound is
+  // then too late for the card, so it does not start
+  const askedAt = performance.now()
+  context.resume().then(() => {
+    if (performance.now() - askedAt > 300) return
+    // the card has too many cells for one sound each, so a grain is for a group of them. the
+    // first particles are small and far, so the grains start when most of them can be seen
+    for (let delay = madeSeconds * 0.12; delay < madeSeconds - 0.1; delay += (0.012 + Math.random() * 0.03) * gap) {
+      const gain = 0.012 + Math.random() * 0.03
+      noise({
+        type: 'highpass',
+        from: 5500 + Math.random() * 5000,
+        duration: 0.012 + Math.random() * 0.012,
+        gain,
+        attack: 0.001,
+        delay,
+        out,
+      })
+      // some grains have a short high note, as glass has
+      if (Math.random() < 0.3) {
+        tone({
+          from: 2600 + Math.random() * 3200,
+          duration: 0.035,
+          gain: gain * 0.35,
+          attack: 0.001,
+          delay,
+          out,
+        })
+      }
     }
-  }
-  tone({ from: 659, duration: 0.9, gain: 0.05, attack: 0.02, delay: madeSeconds - 0.1 })
-  // the card is slow at the end of its turn, so the hit is a little before the end
-  tone({ from: 150, to: 75, duration: 0.14, gain: 0.2, delay: stillSeconds - 0.08 })
-  tone({ from: 988, duration: 1.3, gain: 0.045, attack: 0.02, delay: stillSeconds - 0.08 })
-  tone({ from: 1319, duration: 1.5, gain: 0.025, attack: 0.02, delay: stillSeconds + 0.02 })
+    const [shineFrom, shineTo] = shineSeconds
+    noise({
+      type: 'bandpass',
+      from: 700,
+      to: 2600,
+      duration: shineTo - shineFrom,
+      gain: 0.05,
+      attack: (shineTo - shineFrom) * 0.45,
+      delay: shineFrom,
+      out,
+    })
+    // the card is slow at the end of its turn, so the air is only for the first part of it
+    const [turnFrom, turnTo] = turnSeconds
+    noise({
+      type: 'bandpass',
+      from: 1800,
+      to: 450,
+      duration: (turnTo - turnFrom) * 0.7,
+      gain: 0.06,
+      attack: (turnTo - turnFrom) * 0.25,
+      delay: turnFrom,
+      out,
+    })
+  })
+  return () => out.disconnect()
 }

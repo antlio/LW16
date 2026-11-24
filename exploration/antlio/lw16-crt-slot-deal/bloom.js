@@ -111,6 +111,7 @@ export const createBloom = (renderer, { haze }) => {
   }
 
   return {
+    strength: passes.screen.uniforms.uStrength,
     resize: () => {
       const size = renderer.getDrawingBufferSize(new THREE.Vector2())
       sharp.setSize(size.x, size.y)

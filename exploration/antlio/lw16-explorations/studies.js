@@ -7,8 +7,9 @@ export const groups = [
 
 export const studies = [
   { id: 'card-from-light', title: 'Card from light', group: 'spatial', href: '../lw16-crt-slot-mix/?start=claim', image: 'card-from-light.jpg', color: '#050506' },
+  { id: 'card-light-box', title: 'Card from light, into the box', group: 'spatial', href: '../lw16-crt-slot-mix/?start=claimbox', image: 'card-light-box.jpg', color: '#060501' },
   { id: 'card-box', title: 'Card box', group: 'spatial', href: '../lw16-crt-slot-mix/?start=boxreader', image: 'card-box.jpg', color: '#060501' },
-  { id: 'card-box-under', title: 'Card box, screen under', group: 'spatial', href: '../lw16-crt-slot-mix/?start=boxunder', image: 'card-box-under.jpg', color: '#060501' },
+  { id: 'card-box-light', title: 'Card box, light', group: 'spatial', href: '../lw16-crt-slot-mix/?start=boxlight', image: 'card-box-light.jpg', color: '#e6e4dc' },
   { id: 'city-wheel', title: 'City wheel', group: 'globes', href: '../lw16-city-wheel/', image: 'city-wheel.jpg', color: '#0c0d0d' },
   { id: 'city-rings', title: 'City rings', group: 'globes', href: '../lw16-city-wheel-rings/', image: 'city-rings.jpg', color: '#0c0d0d' },
   { id: 'city-vault', title: 'City vault', group: 'globes', href: '../lw16-city-wheel-vault/', image: 'city-vault.jpg', color: '#0c0d0d' },

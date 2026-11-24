@@ -1,15 +1,35 @@
 // a start is a scene that covers the page. the first one is the start with no choice in the address
 const STARTS = {
   claim: {
-    script: '../lw16-crt-slot-deal/claim.js?v=16',
-    sheet: '../lw16-crt-slot-deal/claim.css?v=5',
+    script: '../lw16-crt-slot-deal/claim.js?v=34',
+    sheet: '../lw16-crt-slot-deal/claim.css?v=7',
   },
   boxreader: {
-    script: '../lw16-crt-slot-deal/box3d-screen.js?v=28',
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=53',
     sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=2',
   },
   boxunder: {
-    script: '../lw16-crt-slot-deal/box3d-screen.js?v=28&under',
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=53&under',
+    sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=2',
+  },
+  boxlight: {
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=53&light',
+    sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=2',
+  },
+  claimbox: {
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=53&claim&note=pixel',
+    sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=4',
+  },
+  boxpixel: {
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=53&note=pixel',
+    sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=2',
+  },
+  boxpunk: {
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=53&note=punk',
+    sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=2',
+  },
+  boxrock: {
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=53&note=rock',
     sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=2',
   },
 }
@@ -59,4 +79,4 @@ document.body.append(document.adoptNode(source.querySelector('.defs')), main)
 await import('../lw16-crt-slot/slot.js?v=2')
 await import('../lw16-crt-slot-foil/white.js?v=4&wide')
 await import('../lw16-crt-slot-dots/screen.js?v=3')
-await import(start.script)
+await import(new URLSearchParams(location.search).has('light') ? `${start.script}&light` : start.script)

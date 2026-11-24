@@ -5,6 +5,11 @@ Open `/lw16-crt-slot-mix/`. A scene covers the page, and the address says which 
 - `claim` (with no choice in the address): the card is made from light.
 - `boxreader`: the card is in a box, and the screen and the slot are in its lid.
 - `boxunder`: the same box with only the slot in its lid, and the screen under the card.
+- `claimbox`: the card is made from light, the open box comes out of the room behind it as the card turns, and the card goes to its pocket. The box stays open, and the card can go into the slot of its lid.
+- `boxlight`: the box with the reader in its lid, as white paper with a light lining, in a light room.
+- `boxpixel`: the box with the reader in its lid, with the "LW16" of its note in Geist Pixel, heavy, and a larger sentence under the card. It is the box of `claimbox`.
+- `boxpunk`: the box with the reader in its lid, with the "LW16" of its note in a punk type, and the sentence under the card.
+- `boxrock`: the box with the reader in its lid, with the "LW16" of its note in a type of rock posters.
 
 All are in `../lw16-crt-slot-deal/`. The card is the white card on its side. The page under the scene is the bare monitor with the dot screen. It does not show: the boxes use its reader for the text of their screen. `?today=` and `?handle=` work as on the first page.
 

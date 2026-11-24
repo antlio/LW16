@@ -16,8 +16,14 @@ import {
 } from '../lw16-crt-slot-foil/card3d.js?v=2'
 import { shown } from '../lw16-crt-slot-foil/foil.js?v=3'
 import { unlock } from '../lw16-crt-slot/sound.js?v=1'
-import { createBloom } from './bloom.js'
-import { playCardIn, playCardOut, playKnock, playOpen } from './box-sound.js?v=2'
+import { createBloom } from './bloom.js?v=2'
+import {
+  playCardIn,
+  playCardOut,
+  playCreate,
+  playKnock,
+  playOpen,
+} from './box-sound.js?v=12'
 
 // wall is how thick the sides of the box are, and tilt leans its top away, so its under side shows
 const BOX = { side: 1.3, depth: 0.32, lid: 0.12, radius: 0.012, wall: 0.02, tilt: -0.16 }
@@ -37,6 +43,29 @@ const TIMES = { lid: [0, 1.1], light: [0.3, 1.1] }
 // with "under" in its address, the lid has only the slot, in the middle of the cell of the
 // mark. the screen is then the floor of the pocket, so the card is on it
 const isScreenUnder = new URL(import.meta.url).searchParams.has('under')
+// with "light" in its address, the box is white paper with a light lining, in a light room.
+// pick has the dark value first, then the light one
+const isLight = new URL(import.meta.url).searchParams.has('light')
+const pick = (dark, light) => (isLight ? light : dark)
+// the note of the box has other forms, by "note" in the address. rock: its "LW16" is in New
+// Rocker, a type of rock posters. punk: it is in Reggae One, with a lean, and the note has
+// another order. pixel: that order, with "LW16" in Geist Pixel
+const NOTE_TYPE = new URL(import.meta.url).searchParams.get('note')
+// with "claim" in its address, the card is first made from light (light-build.js), with no
+// box, and it turns on its side when the light of its foil is at the end of its way. as it
+// turns, the open box comes out of the room behind it, the card goes to its pocket, and the
+// tabs hold it (hold). after that the scene is the open box with no card made first. the
+// seconds are from the start of the scene. place is where the card is made, and lean is the
+// small turn and the lean of the card at first
+const CLAIM = {
+  make: [0.1, 4.5],
+  turn: [5.16, 6.16],
+  box: [5.16, 6.6],
+  pack: [6.9, 8.2],
+  hold: [8.2, 8.5],
+  place: new THREE.Vector3(0, 0.3, 2.5),
+  lean: { yaw: 0.5, roll: -0.1 },
+}
 // the screen is the cell of the mark on the inner side of the lid: only glass, with pad of
 // paper around it. bulge is how round the glass is. picture is the size of what it shows,
 // in pixels, and lines is how many lines the tube has
@@ -56,9 +85,10 @@ const SLOT = { w: 0.7, depth: 0.55, under: 0.06 }
 const GLOBE = { tilt: 0.38, turn: 0.35, parallels: [-60, -40, -20, 0, 20, 40, 60] }
 // the way of the card goes from 0, in the pocket, to 1, at the end of the slot. a card that
 // is let go after seatFrom goes in. a card in the slot that is pulled back before outAt
-// comes out, and the screen goes off. in the first part of its way, to lift, the card only
-// comes straight up out of its pocket, so it does not go under the sheet
-const WAY = { seatFrom: 0.72, outAt: 0.88, high: 0.05, lift: 0.06 }
+// comes out, and the screen goes off. in the first part of its way, to slide, the top of the
+// card comes up by tilt and the card goes up from under the tabs. then, to lift, it comes off
+// the paper
+const WAY = { seatFrom: 0.72, outAt: 0.88, high: 0.05, slide: 0.03, lift: 0.06, tilt: 0.35 }
 // fast, with a small overshoot when the card comes back to the pocket
 const SPRING = { stiffness: 420, damping: 34 }
 // a press on the box that does not open it: the box goes up, and its lid opens by a small angle
@@ -95,12 +125,13 @@ const MARK_REACH = 0.15
 const NOTE_FOIL = { bands: 2.4, color: 0.7 }
 // the light goes over the closed box once in this many seconds
 const SWEEP_SECONDS = 4.2
-const SKY_LIGHT = 0.32
+// white paper gives back much more light than black paper, so the light box has less light
+const SKY_LIGHT = pick(0.32, 1)
 const LIGHTS = {
-  key: 11,
-  under: 2.5,
-  top: 28,
-  sweep: 1.6,
+  key: pick(11, 3.2),
+  under: pick(2.5, 0.5),
+  top: pick(28, 7.5),
+  sweep: pick(1.6, 0.3),
   mark: 1.2,
   open: 0.25,
   arrow: 1.8,
@@ -210,11 +241,12 @@ const drawTable = ({ ctx, line, ink, shade }) => {
   ctx.restore()
 }
 
-// the paper of the two sides of the lid is black, with a little more light at one corner
+// the paper of the two sides of the lid is black, or white in the light box, with a little
+// more light at one corner
 const fillPaper = (ctx) => {
   const paper = ctx.createLinearGradient(0, 0, LID_SIZE, LID_SIZE)
-  paper.addColorStop(0, '#222223')
-  paper.addColorStop(1, '#111112')
+  paper.addColorStop(0, pick('#222223', '#f4f3ef'))
+  paper.addColorStop(1, pick('#111112', '#e6e4dd'))
   ctx.fillStyle = paper
   ctx.fillRect(0, 0, LID_SIZE, LID_SIZE)
 }
@@ -223,7 +255,12 @@ const lidColor = paint({
   w: LID_SIZE,
   draw: (ctx) => {
     fillPaper(ctx)
-    drawTable({ ctx, line: 2, ink: 'rgb(226 226 220 / 0.2)', shade: 'rgb(255 255 255 / 0.05)' })
+    drawTable({
+      ctx,
+      line: 2,
+      ink: pick('rgb(226 226 220 / 0.2)', 'rgb(28 28 30 / 0.2)'),
+      shade: pick('rgb(255 255 255 / 0.05)', 'rgb(0 0 0 / 0.04)'),
+    })
     strokeMark({
       ctx,
       x: LID_SIZE / 2,
@@ -318,12 +355,12 @@ const lidInside = paint({
     // the picture, because the same light must keep the tray under the lid bright
     const fall = ctx.createRadialGradient(LID_SIZE / 2, 60, 80, LID_SIZE / 2, 60, LID_SIZE * 1.05)
     fall.addColorStop(0, 'rgb(0 0 0 / 0)')
-    fall.addColorStop(0.45, 'rgb(0 0 0 / 0.42)')
-    fall.addColorStop(1, 'rgb(0 0 0 / 0.68)')
+    fall.addColorStop(0.45, `rgb(0 0 0 / ${pick(0.42, 0.05)})`)
+    fall.addColorStop(1, `rgb(0 0 0 / ${pick(0.68, 0.14)})`)
     ctx.fillStyle = fall
     ctx.fillRect(0, 0, LID_SIZE, LID_SIZE)
     fillSlot(ctx, '#050505')
-    if (isScreenUnder) fillArrow(ctx, 'rgb(0 0 0 / 0.5)')
+    if (isScreenUnder) fillArrow(ctx, `rgb(0 0 0 / ${pick(0.5, 0.25)})`)
   },
 })
 
@@ -382,12 +419,12 @@ const lidInsideHeight = paint({
 
 // the sheet in the box has a note at its top. the pocket of the card is under the note, and
 // the card is on its side in it, so a box that is square has room for it
-const POCKET = { y: -0.24, pad: 0.014 }
+// a note with its sentence under the pocket has a higher pocket
+const POCKET = { y: { punk: -0.2, pixel: -0.16 }[NOTE_TYPE] ?? -0.24, pad: 0.014 }
 // what holds the card in its pocket: two half round tabs of the lining over its lower edge,
 // and a half round cut over its upper edge for a finger. tab and cut are their sizes, tabX
-// is how far a tab is from the middle, and open is how far a tab turns up to let the card
-// out, in radians
-const HOLDER = { tab: 0.05, tabX: 0.3, cut: 0.06, open: 1.1 }
+// is how far a tab is from the middle
+const HOLDER = { tab: 0.05, tabX: 0.3, cut: 0.06 }
 const SHEET_SIDE = BOX.side * 0.97 - BOX.wall * 2
 // short fibers that lie more or less in one direction, half of them light and half dark
 const strokeFibers = (ctx, alpha) => {
@@ -435,18 +472,18 @@ const NAP_MARKS = [
   [40, 960, 260, 860, 420, 1000],
 ]
 
-// black velvet from the front. the nap takes the light in clouds and in marks, and the
-// fibers make it soft
+// black velvet from the front, or light felt in the light box. the nap takes the light in
+// clouds and in marks, and the fibers make it soft
 const velvetColor = paint({
   w: LID_SIZE,
   draw: (ctx) => {
-    ctx.fillStyle = '#060607'
+    ctx.fillStyle = pick('#060607', '#f1efe9')
     ctx.fillRect(0, 0, LID_SIZE, LID_SIZE)
     drawClouds(ctx, { cells: 7, alpha: 0.06 })
     drawClouds(ctx, { cells: 28, alpha: 0.05 })
     // a mark has no hard edge: only its shadow is on the picture, and the mark is off it
     ctx.save()
-    ctx.shadowColor = 'rgb(225 225 240 / 0.075)'
+    ctx.shadowColor = pick('rgb(225 225 240 / 0.075)', 'rgb(255 255 255 / 0.3)')
     ctx.shadowBlur = 60
     ctx.shadowOffsetX = LID_SIZE * 2
     ctx.lineWidth = 120
@@ -476,11 +513,103 @@ const velvetHeight = paint({
 
 // the note is a short label, in the pixels of the picture of the sheet: one line of small
 // print, a bar code, and the note
-const NOTE = { left: 92, right: 932, ink: '#e8e4da' }
+const NOTE = { left: 92, right: 932, ink: pick('#e8e4da', '#1d1c1a') }
+// the file of Reggae One has only the four letters of "LW16"
+const noteFont = {
+  rock: ['New Rocker', 'NewRocker-Regular.ttf'],
+  punk: ['Reggae One', 'ReggaeOne-LW16.ttf'],
+  pixel: ['Geist Pixel Square', 'GeistPixel-Square.woff2'],
+}[NOTE_TYPE]
+if (noteFont) {
+  // a canvas draws only with a font that is there, so the note waits for it
+  const face = new FontFace(
+    noteFont[0],
+    `url(${new URL(`../shared/fonts/${noteFont[1]}`, import.meta.url)})`
+  )
+  document.fonts.add(await face.load())
+}
+
+// "LW16" in a display type, as wide as the note. its letters are as high as the room from
+// top to bottom, and the tail of a letter is in that room too. the letters are wider than
+// in the font (wide) and they lean to the right (lean). the space between them takes the
+// rest of the width
+const drawWideTitle = (ctx, { family, top, bottom, wide, lean }) => {
+  const { left, right } = NOTE
+  ctx.font = `400 200px "${family}"`
+  const box = ctx.measureText('LW16')
+  const scale = (bottom - top) / (box.actualBoundingBoxAscent + box.actualBoundingBoxDescent)
+  ctx.font = `400 ${200 * scale}px "${family}"`
+  const letters = [...'LW16'].map((letter) => ({
+    letter,
+    width: ctx.measureText(letter).width * wide,
+  }))
+  // the tops of letters that lean are to the right of their feet by this much
+  const room = right - left - lean * (bottom - top)
+  const space = (room - letters.reduce((sum, { width }) => sum + width, 0)) / 3
+  ctx.textAlign = 'left'
+  for (const [index, { letter }] of letters.entries()) {
+    const before = letters.slice(0, index).reduce((sum, { width }) => sum + width + space, 0)
+    ctx.save()
+    ctx.translate(left + before, bottom - box.actualBoundingBoxDescent * scale)
+    ctx.transform(wide, 0, -lean, 1, 0, 0)
+    ctx.fillText(letter, 0, 0)
+    ctx.restore()
+  }
+}
+
+// "LW16" in the middle of the note. its first type is Geist Pixel, the type of the Launch
+// Week 16 site. the panel of the title changes these values (title-tune.js)
+const TITLE = {
+  font: 'Geist Pixel Square',
+  weight: 400,
+  heavy: 0.07,
+  lean: 0,
+  wide: 1,
+  height: 140,
+}
+
+// Geist Pixel has one weight, so a line around each letter makes it heavy, and the corners
+// of that line are square as the dots of the type are
+const drawPixelTitle = (ctx) => {
+  const { font, weight, heavy, lean, wide, height } = TITLE
+  const bottom = 134 + height
+  ctx.font = `${weight} 200px "${font}"`
+  const box = ctx.measureText('LW16')
+  const size =
+    (200 * height) / (box.actualBoundingBoxAscent + box.actualBoundingBoxDescent + 200 * heavy)
+  ctx.font = `${weight} ${size}px "${font}"`
+  ctx.lineJoin = 'miter'
+  ctx.lineWidth = size * heavy
+  ctx.strokeStyle = NOTE.ink
+  const base = bottom - (size * heavy) / 2 - (box.actualBoundingBoxDescent * size) / 200
+  ctx.save()
+  ctx.translate((NOTE.left + NOTE.right) / 2, base)
+  ctx.transform(wide, 0, -lean, 1, 0, 0)
+  // a line width of 0 is not a value for a canvas, which then keeps the last width
+  if (heavy) ctx.strokeText('LW16', 0, 0)
+  ctx.fillText('LW16', 0, 0)
+  ctx.restore()
+}
+
+// the notes with a large "LW16": the small print is in the middle over it, the note has no
+// bar code, and the sentence is under the pocket of the card, with no full stop. the pixel
+// note has a smaller "LW16" and a higher pocket, so its sentence has more room
+const drawLargeNote = (ctx) => {
+  const middle = (NOTE.left + NOTE.right) / 2
+  ctx.textAlign = 'center'
+  ctx.font = '600 20px ui-monospace, Menlo, monospace'
+  ctx.fillText('SUPABASE', middle, 104)
+  if (NOTE_TYPE === 'pixel') drawPixelTitle(ctx)
+  else drawWideTitle(ctx, { family: 'Reggae One', top: 132, bottom: 322, wide: 1.1, lean: 0.22 })
+  ctx.textAlign = 'center'
+  ctx.font = `400 ${NOTE_TYPE === 'pixel' ? 36 : 28}px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif`
+  ctx.fillText('One launch a day, 6 to 10 December', middle, NOTE_TYPE === 'pixel' ? 992 : 1004)
+}
 
 const drawNote = (ctx) => {
   const { left, right, ink } = NOTE
   ctx.fillStyle = ink
+  if (NOTE_TYPE === 'punk' || NOTE_TYPE === 'pixel') return drawLargeNote(ctx)
   ctx.font = '600 20px ui-monospace, Menlo, monospace'
   ctx.fillText('SUPABASE', left, 104)
   // the bars are thin at the left and wide at the right, and a space is as wide as its bar
@@ -489,19 +618,25 @@ const drawNote = (ctx) => {
     ctx.fillRect(x, 70, width, 42)
     x += width * 2
   }
+  ctx.font = '400 32px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif'
+  if (NOTE_TYPE === 'rock') {
+    // the sentence is under the wide "LW16", in the middle
+    drawWideTitle(ctx, { family: 'New Rocker', top: 128, bottom: 318, wide: 1.3, lean: 0 })
+    ctx.textAlign = 'center'
+    ctx.font = '400 32px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif'
+    ctx.fillText('One launch a day, 6 to 10 December.', (left + right) / 2, 356)
+    return
+  }
+  ctx.fillText('One launch a day, 6 to 10 December.', left, 272)
   ctx.font = 'italic 500 64px Georgia, "Times New Roman", serif'
   ctx.fillText('LW16', left, 212)
-  ctx.font = '400 32px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif'
-  ctx.fillText('One launch a day, 6 to 10 December.', left, 272)
 }
 
-const sheetColor = paint({
-  w: LID_SIZE,
-  draw: (ctx) => {
-    ctx.drawImage(velvetColor, 0, 0)
-    drawNote(ctx)
-  },
-})
+const drawSheet = (ctx) => {
+  ctx.drawImage(velvetColor, 0, 0)
+  drawNote(ctx)
+}
+const sheetColor = paint({ w: LID_SIZE, draw: drawSheet })
 
 const paperHeight = paint({
   w: 512,
@@ -523,9 +658,17 @@ document.body.append(dialog)
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false })
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(VIEW.fov, 1, 0.1, 50)
-const bloom = createBloom(renderer, { haze: [0.011, 0.009, 0.002] })
+const bloom = createBloom(renderer, { haze: pick([0.011, 0.009, 0.002], [0, 0, 0]) })
 
-renderer.setClearColor(0x060501)
+// the light room is under the light that glows, so it does not glow over the box. its
+// numbers are light and not a color of the screen, and the screen shows them less light
+const roomColor = pick(new THREE.Color(0x060501), new THREE.Color().setRGB(0.95, 0.94, 0.9))
+renderer.setClearColor(roomColor)
+if (isLight) {
+  bloom.strength.value = 0.25
+  dialog.style.background = '#e6e4dc'
+  dialog.classList.add('light')
+}
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
@@ -540,7 +683,7 @@ const withShadow = (light) => {
   return light
 }
 
-const sky = new THREE.HemisphereLight(0x3c3a36, 0x0c0a08, SKY_LIGHT)
+const sky = new THREE.HemisphereLight(pick(0x3c3a36, 0xffffff), pick(0x0c0a08, 0xc9c5bb), SKY_LIGHT)
 scene.add(sky)
 // the key light is near the box, up and to the left, so the far side of the lid has less light
 const key = withShadow(new THREE.SpotLight(0xffffff, LIGHTS.key, 0, 0.6, 1, 1.8))
@@ -556,7 +699,7 @@ const paperBump = textureOf(paperHeight, false)
 paperBump.wrapS = paperBump.wrapT = THREE.RepeatWrapping
 paperBump.repeat.set(4, 4)
 const shell = new THREE.MeshStandardMaterial({
-  color: 0x18181a,
+  color: pick(0x18181a, 0xebe9e2),
   roughness: 0.85,
   bumpMap: paperBump,
   bumpScale: 0.3,
@@ -685,10 +828,15 @@ sheetMaterial.onBeforeCompile = (shader) => {
     .replace(
       '#include <map_fragment>',
       /* glsl */ `#include <map_fragment>
-      // only the print is light, so the velvet keeps its color
-      float print = smoothstep(.2, .55, dot(diffuseColor.rgb, vec3(.2126, .7152, .0722)));
+      // only the print is light, so the velvet keeps its color. in the light box the print
+      // is dark, and the foil gives it color
+      float light = smoothstep(.2, .55, dot(diffuseColor.rgb, vec3(.2126, .7152, .0722)));
       vec3 spectrum = .5 + .5 * cos(6.2832 * (distance(vMapUv, uNoteLight) * ${NOTE_FOIL.bands.toFixed(2)} + vec3(0., .33, .67)));
-      diffuseColor.rgb *= mix(vec3(1.), .55 + spectrum * .9, print * ${NOTE_FOIL.color.toFixed(2)});`
+      ${
+        isLight
+          ? `diffuseColor.rgb += spectrum * .1 * (1. - light) * ${NOTE_FOIL.color.toFixed(2)};`
+          : `diffuseColor.rgb *= mix(vec3(1.), .55 + spectrum * .9, light * ${NOTE_FOIL.color.toFixed(2)});`
+      }`
     )
 }
 const sheet = solid(sheetGeometry, sheetMaterial)
@@ -705,8 +853,8 @@ const drawPocketArt = (ctx) => {
     ctx.restore()
   }
   ctx.lineWidth = 2
-  ctx.strokeStyle = 'rgb(232 228 218 / 0.34)'
-  ctx.fillStyle = 'rgb(232 228 218 / 0.3)'
+  ctx.strokeStyle = pick('rgb(232 228 218 / 0.34)', 'rgb(29 28 26 / 0.3)')
+  ctx.fillStyle = pick('rgb(232 228 218 / 0.3)', 'rgb(29 28 26 / 0.26)')
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const row = height * 0.43
@@ -766,7 +914,7 @@ const pocketColor = paint({
   h: Math.round((LID_SIZE * pocketSize.h) / pocketSize.w),
   draw: (ctx) => {
     ctx.drawImage(velvetColor, 0, 0)
-    ctx.fillStyle = 'rgb(0 0 0 / 0.5)'
+    ctx.fillStyle = `rgb(0 0 0 / ${pick(0.5, 0.07)})`
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
     if (isScreenUnder) return
     // the drawing is made larger from the middle, so it has less room around it
@@ -784,11 +932,8 @@ pocketFloor.position.set(0, POCKET.y, sheetTop - SHEET.pocket)
 // the cut for the finger has the same floor as the pocket
 const cutFloor = solid(new THREE.CircleGeometry(HOLDER.cut, 24, 0, Math.PI), lining)
 cutFloor.position.set(0, POCKET.y + pocketSize.h / 2, sheetTop - SHEET.pocket)
-// a tab is flat on the card, and it turns up on the edge of the pocket. it shows its two sides
-const tabLining = lining.clone()
-tabLining.side = THREE.DoubleSide
 const tabs = [-HOLDER.tabX, HOLDER.tabX].map((x) => {
-  const tab = solid(new THREE.CircleGeometry(HOLDER.tab, 24, 0, Math.PI), tabLining)
+  const tab = solid(new THREE.CircleGeometry(HOLDER.tab, 24, 0, Math.PI), lining)
   tab.position.set(x, POCKET.y - pocketSize.h / 2, sheetTop + 0.0005)
   return tab
 })
@@ -990,6 +1135,34 @@ const slotCover = new THREE.Mesh(
 slotCover.position.set(0, SLOT_MOUTH + slotCover.geometry.parameters.height / 2, 0.03)
 slotCover.renderOrder = 1
 reader.add(slotCover)
+// the inside of the slot is velvet, as the lining is. the paper of the lid shines, so a
+// color on its picture shows grey. the velvet is a little less wide than the groove in the
+// paper, so the edge of the groove shows
+const slotVelvetRadius = (7 / LID_SIZE) * BOX.side
+const slotVelvetEnd = (SLOT.w - 0.006) / 2 - slotVelvetRadius
+const slotVelvetShape = new THREE.Shape()
+  .absarc(slotVelvetEnd, 0, slotVelvetRadius, -Math.PI / 2, Math.PI / 2)
+  .absarc(-slotVelvetEnd, 0, slotVelvetRadius, Math.PI / 2, Math.PI * 1.5)
+const slotVelvetGeometry = new THREE.ShapeGeometry(slotVelvetShape, 8)
+for (let index = 0; index < slotVelvetGeometry.attributes.uv.count; index++) {
+  slotVelvetGeometry.attributes.uv.setXY(
+    index,
+    slotVelvetGeometry.attributes.position.getX(index) / BOX.side + 0.5,
+    slotVelvetGeometry.attributes.position.getY(index) / BOX.side + 0.5
+  )
+}
+// the light of the lid is strong, so this velvet has less sheen than the lining
+const slotVelvet = solid(
+  slotVelvetGeometry,
+  new THREE.MeshPhysicalMaterial({
+    ...VELVET,
+    map: lining.map,
+    color: pick(0x555555, 0xffffff),
+    sheenColor: pick(0x1c1c22, 0x6c6c78),
+  })
+)
+slotVelvet.position.set(0, SLOT_MOUTH, 0.0005)
+reader.add(slotVelvet)
 hinge.add(lid, reader)
 box.add(floor, ...walls, sheet, pocketFloor, cutFloor, ...tabs, hinge)
 scene.add(box)
@@ -1003,6 +1176,24 @@ const card = createCard(foil ?? new THREE.MeshBasicMaterial({ map: textureOf(pic
 card.children[0].castShadow = true
 for (const part of card.children) part.renderOrder = 2
 scene.add(card)
+// while the card is made, a sheet in the color of the room is between the card and the box.
+// the glass of the screen takes no light, so only a sheet hides the box. the sheet is drawn
+// first, so the particles of the card are over it
+const veil = new THREE.Mesh(
+  new THREE.PlaneGeometry(40, 40),
+  new THREE.MeshBasicMaterial({ color: roomColor, transparent: true, depthWrite: false, toneMapped: false })
+)
+veil.position.z = 2.1
+veil.renderOrder = -1
+scene.add(veil)
+// with no motion, the card is in the closed box at once
+const light =
+  new URL(import.meta.url).searchParams.has('claim') && foil && !isMotionReduced
+    ? await import('./light-build.js?v=1')
+    : null
+const build = light?.createLightBuild({ card, foil })
+// the edge of the card has a plane that cuts it at the line that makes the card
+renderer.localClippingEnabled = Boolean(build)
 
 const resize = () => {
   const { clientWidth: width, clientHeight: height } = dialog
@@ -1022,12 +1213,17 @@ const TRACK = {
   seat: SLOT_MOUTH_Y + CARD.h * (SLOT.depth - 0.5),
   pocketZ: sheetTop - SHEET.pocket + CARD.depth,
   z: BOX.depth / 2 + 0.011,
+  // how far the card goes up in its pocket, so its lower edge is out from under the tabs
+  slide: HOLDER.tab - POCKET.pad + 0.01,
 }
 // the part of the way where the top of the card is on the mouth of the slot
 const MOUTH_AT =
-  WAY.lift + ((1 - WAY.lift) * (SLOT_MOUTH_Y - CARD.h / 2 - TRACK.rest)) / (TRACK.seat - TRACK.rest)
+  WAY.lift +
+  ((1 - WAY.lift) * (SLOT_MOUTH_Y - CARD.h / 2 - TRACK.rest - TRACK.slide)) /
+    (TRACK.seat - TRACK.rest - TRACK.slide)
 
-let step = 'box'
+// claim: the card is made and goes into the box. box: the box is closed. open: it is open
+let step = build ? 'claim' : 'box'
 let stepAt = 0
 // the part of the scene under the pointer: the mark of the lid, the box, the card, or nothing
 let hovered = null
@@ -1038,6 +1234,8 @@ let waySpeed = 0
 let isSeatWanted = false
 // a card in the hand: where the card and the pointer were at the start, and if the screen was on
 let grab = null
+// when the claim button was pressed, for the seconds of CLAIM. before that, the scene waits at 0
+let claimAt = null
 let isReaderOn = false
 let lastSeconds = 0
 // when the card went into the slot. before that, no blast is on its way
@@ -1070,6 +1268,7 @@ const partAt = (event) => {
     1 - (event.clientY / dialog.clientHeight) * 2
   )
   raycaster.setFromCamera(pointer, camera)
+  if (step === 'claim') return null
   if (step !== 'box') {
     // the part of the card that is in the slot takes no pointer
     const [onCard] = raycaster.intersectObject(card)
@@ -1109,12 +1308,16 @@ const draw = (now) => {
   lean.x += ((isOnBox ? -hoverFromMiddle.y : 0) * HOVER.lean - lean.x) * HOVER.speed
   lean.y += ((isOnBox ? hoverFromMiddle.x : 0) * HOVER.lean - lean.y) * HOVER.speed
 
-  const lidOpen = ease(span(opened, TIMES.lid))
+  const claimSeconds = claimAt === null ? 0 : seconds - claimAt
+  // while the card is made, the box is open. it comes out of the room as the card turns
+  const lidOpen = step === 'claim' ? 1 : ease(span(opened, TIMES.lid))
   const jump = isMotionReduced ? 0 : Math.sin(span(seconds - jumpAt, [0, JUMP.seconds]) * Math.PI)
   hinge.rotation.x = -Math.PI * lidOpen - JUMP.lid * jump * (1 - lidOpen)
   box.position.lerpVectors(PLACES.closed, PLACES.open, lidOpen)
   box.position.y += JUMP.high * jump * (1 - lidOpen)
-  sky.intensity = SKY_LIGHT * (1 - lidOpen * 0.35)
+  veil.material.opacity = step === 'claim' ? 1 - ease(span(claimSeconds, CLAIM.box)) : 0
+  veil.visible = veil.material.opacity > 0
+  sky.intensity = SKY_LIGHT * (1 - lidOpen * pick(0.35, 0))
   box.rotation.set(
     (BOX.tilt + Math.sin(seconds * 0.8) * 0.012 + lean.x) * (1 - lidOpen),
     (Math.sin(seconds * 0.6) * 0.04 + lean.y) * (1 - lidOpen),
@@ -1165,26 +1368,38 @@ const draw = (now) => {
   glow.screen += ((isReaderOn ? 1 : 0) - glow.screen) * HOVER.speed
   lidLight.arrow.value = LIGHTS.arrow * glow.screen
   lidLight.blast.value.set((seconds - blastAt) * BLAST.speed, isMotionReduced ? 0 : LIGHTS.blast)
-  if (step === 'open') {
+  if (step !== 'box') {
     drawScreen({ seconds, on: glow.screen, isCardIn: isReaderOn })
     screenTexture.needsUpdate = true
   }
 
-  // the tabs turn up as the card comes out of the pocket or goes back in, then they go down
-  for (const tab of tabs) tab.rotation.x = HOLDER.open * Math.sin(span(way, [0, 0.14]) * Math.PI)
-  // the card comes up out of its pocket, turns up, and goes to the slot with its top first
+  // the claim puts the card down on the paper over the tabs, and then it goes under them
+  if (step === 'claim') way = WAY.slide * (1 - ease(span(claimSeconds, CLAIM.hold)))
+  // as a hand takes a card from its pocket: the top of the card comes up, and the card goes
+  // up from under the tabs with its lower edge in the pocket. then it comes off the paper,
+  // lies flat again, turns up, and goes to the slot with its top first. the lower edge stays
+  // under the tabs, so they do not go through it
+  const cardTilt =
+    WAY.tilt * ease(span(way, [0, WAY.slide * 0.6])) * (1 - ease(span(way, [WAY.slide, WAY.lift])))
+  const cardY =
+    TRACK.rest +
+    TRACK.slide * ease(span(way, [WAY.slide * 0.3, WAY.slide])) +
+    (TRACK.seat - TRACK.rest - TRACK.slide) * span(way, [WAY.lift, 1])
+  const cardTurn = (Math.PI / 2) * (1 - ease(span(way, [WAY.lift, 0.4])))
   box.updateMatrixWorld()
   cardPlace
     .set(
       0,
-      TRACK.rest + (TRACK.seat - TRACK.rest) * span(way, [WAY.lift, 1]),
+      // the card turns around its lower edge, so its middle comes out of the pocket
+      cardY - (CARD.w / 2) * (1 - Math.cos(cardTilt)),
       TRACK.pocketZ +
-        (TRACK.z - TRACK.pocketZ) * ease(span(way, [0, WAY.lift])) +
-        Math.sin(span(way, [0, MOUTH_AT]) * Math.PI) * WAY.high
+        (CARD.w / 2) * Math.sin(cardTilt) +
+        (TRACK.z - TRACK.pocketZ) * ease(span(way, [WAY.slide, WAY.lift])) +
+        Math.sin(span(way, [WAY.slide, MOUTH_AT]) * Math.PI) * WAY.high
     )
     .applyMatrix4(box.matrixWorld)
   card.position.copy(cardPlace)
-  card.rotation.set(box.rotation.x, 0, (Math.PI / 2) * (1 - ease(span(way, [WAY.lift, 0.4]))))
+  card.rotation.set(box.rotation.x + cardTilt, 0, cardTurn)
 
   // the light has a place in the scene, so it goes over the foil as the card turns. after
   // the first move of the pointer, the light is under the pointer, on the card or off it
@@ -1200,15 +1415,52 @@ const draw = (now) => {
     foil.uniforms.uPointer.value.set(lightPlace.x / (CARD.w / 2), -lightPlace.y / (CARD.h / 2))
     foil.uniforms.uHover.value = ease(span(opened, TIMES.light))
   }
+  if (build) drawClaim(claimSeconds)
 
   bloom.render(scene, camera)
   requestAnimationFrame(draw)
 }
 
+// the card that is made from light, and its way into the box. it is made at its place, with
+// a small turn and a lean at first, and it turns on its side there. then it goes to its
+// pocket, a little to the window on its way, and the tabs of the pocket turn up for it. the
+// rest of draw put the card in its pocket before this, so its place there is in cardPlace
+const drawClaim = (claimSeconds) => {
+  if (step !== 'claim') {
+    // the plane that cuts the edge of the card stays with the card
+    build.update({ made: 1, settleSeconds: 99 })
+    return
+  }
+  const made = ease(span(claimSeconds, CLAIM.make))
+  const packed = ease(span(claimSeconds, CLAIM.pack))
+  card.position.lerpVectors(CLAIM.place, cardPlace, packed)
+  card.position.z += Math.sin(packed * Math.PI) * 0.35
+  card.rotation.set(
+    card.rotation.x * packed,
+    CLAIM.lean.yaw * (1 - made),
+    CLAIM.lean.roll * (1 - made) + (Math.PI / 2) * ease(span(claimSeconds, CLAIM.turn))
+  )
+  // far from the box, the shadow of the card on the lid is a second dark card behind it
+  card.children[0].castShadow = packed > 0.8
+  const settleSeconds = claimSeconds - CLAIM.make[1]
+  const shone = build.update({ made: span(claimSeconds, CLAIM.make), settleSeconds })
+  // after its way up the card, the light of the foil comes on again at its place
+  if (shone === 1) {
+    foil.uniforms.uHover.value = ease(span(settleSeconds - light.SHINE.seconds[1], [0, 0.8]))
+  }
+  if (claimSeconds < CLAIM.hold[1]) return
+  // the box stays open with the card in its pocket, as a box that was opened with a press
+  step = 'open'
+  stepAt = performance.now() / 1000 - TIMES.lid[1]
+  nameScene()
+}
+
 // the scene has no text. the canvas is its one control, and its name is what Enter does
 const nameScene = () => {
   const name =
-    step === 'box'
+    step === 'claim'
+      ? 'Your Launch Week 16 card'
+      : step === 'box'
       ? 'Open the box'
       : isSeatWanted
         ? 'Take the card out of the reader'
@@ -1282,7 +1534,54 @@ canvas.addEventListener('keydown', (event) => {
 dialog.addEventListener('cancel', (event) => event.preventDefault())
 addEventListener('resize', resize)
 
-dialog.showModal()
+// the panel of the title is in the page and not in the dialog. a modal dialog takes all the
+// input of the page, so with the panel the dialog is not modal
+if (NOTE_TYPE === 'pixel') {
+  dialog.show()
+  const { openTitlePanel } = await import('./title-tune.js?v=1')
+  openTitlePanel({
+    title: TITLE,
+    theme: pick('dark', 'light'),
+    onChange: () => {
+      drawSheet(sheetColor.getContext('2d'))
+      sheetMaterial.map.needsUpdate = true
+    },
+  })
+} else dialog.showModal()
 resize()
 nameScene()
 requestAnimationFrame(draw)
+if (build) {
+  const claimButton = Object.assign(document.createElement('button'), {
+    className: 'claim-start',
+    textContent: 'Claim my card',
+  })
+  dialog.append(claimButton)
+  const lightSwitch = Object.assign(document.createElement('button'), {
+    className: 'light-switch',
+    role: 'switch',
+    innerHTML: 'Light<span></span>',
+  })
+  lightSwitch.setAttribute('aria-checked', String(isLight))
+  dialog.append(lightSwitch)
+  // the colors of the room are made at the start, so the switch loads the scene again
+  lightSwitch.addEventListener('click', () => {
+    const url = new URL(location.href)
+    if (isLight) url.searchParams.delete('light')
+    else url.searchParams.set('light', '')
+    location.href = url
+  })
+  // the sound needs a press on the page, so it starts with the button
+  claimButton.addEventListener('click', () => {
+    claimAt = performance.now() / 1000
+    claimButton.remove()
+    canvas.focus()
+    playCreate({
+      madeSeconds: CLAIM.make[1],
+      shineSeconds: light.SHINE.seconds.map((seconds) => CLAIM.make[1] + seconds),
+      turnSeconds: CLAIM.turn,
+      volume: 1,
+      gap: 1,
+    })
+  })
+}
