@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#101011" />
+    <meta
+      name="description"
+      content="A study for Launch Week 16: put your card in the slot of a Supabase monitor to see the launch of the day. The monitor is only a screen and a slot."
+    />
+    <title>LW16 · Monitor card slot, bare</title>
+    <link rel="stylesheet" href="../lw16-crt-slot/style.css?v=1" />
+    <link rel="stylesheet" href="./bare.css?v=1" />
+  </head>
+  <body>
+    <svg class="defs" width="0" height="0" aria-hidden="true">
+      <defs>
+        <path
+          id="bolt"
+          d="M63.7076 110.284C60.8481 113.885 55.0502 111.912 54.9813 107.314L53.9738 40.0627L99.1935 40.0627C107.384 40.0627 111.952 49.5228 106.859 55.9374L63.7076 110.284ZM45.317 2.07103C48.1765 -1.53037 53.9745 0.442937 54.0434 5.041L54.4849 72.2922H9.83113C1.64038 72.2922 -2.92775 62.8321 2.1655 56.4175L45.317 2.07103Z"
+        />
+        <!-- hides the half of the line that is in the mark, and the line where its two halves meet -->
+        <mask id="bolt-outside" maskUnits="userSpaceOnUse" x="-8" y="-8" width="125" height="129">
+          <rect x="-8" y="-8" width="125" height="129" fill="#fff" />
+          <use href="#bolt" fill="#000" />
+        </mask>
+        <symbol id="mark" viewBox="-6 -6 121 125">
+          <use href="#bolt" fill="none" stroke="currentColor" stroke-width="11" mask="url(#bolt-outside)" />
+        </symbol>
+      </defs>
+    </svg>
+    <main>
+      <section class="stage" aria-label="Launch Week 16 monitor">
+        <div class="crt" id="crt">
+          <div class="tube">
+            <div class="picture">
+              <div class="boot" id="boot">
+                <p>Supabase LW16</p>
+                <p id="boot-card"></p>
+                <p class="reading">Reading card<i></i></p>
+              </div>
+              <div class="live" id="live" hidden>
+                <p class="corner top-left">LW16</p>
+                <p class="corner top-right" id="status"></p>
+                <svg class="mark" aria-hidden="true"><use href="#mark" /></svg>
+                <p class="kicker" id="kicker"></p>
+                <p class="headline" id="headline"></p>
+                <p id="sub"></p>
+                <p class="corner bottom-left" id="holder"></p>
+                <p class="corner bottom-right" id="dates"></p>
+              </div>
+            </div>
+          </div>
+          <span class="slot" aria-hidden="true"></span>
+        </div>
+        <div class="bay">
+          <svg class="chevron" viewBox="0 0 20 10" aria-hidden="true"><path d="M2 8 10 2 18 8" /></svg>
+          <button class="card" id="card" type="button" aria-pressed="false" aria-describedby="hint">
+            <span class="contacts"></span>
+            <svg class="card-mark" aria-hidden="true"><use href="#mark" /></svg>
+            <span>Launch Week 16</span>
+            <strong id="card-handle"></strong>
+            <span>No. 0042</span>
+            <small>Placeholder card</small>
+          </button>
+        </div>
+        <p class="hint" id="hint" aria-live="polite"></p>
+      </section>
+    </main>
+    <script type="module" src="../lw16-crt-slot/slot.js?v=2"></script>
+  </body>
+</html>

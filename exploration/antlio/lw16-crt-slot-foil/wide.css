@@ -1,0 +1,10 @@
+/* the white card on its side: wider than it is high, and wider than the upright card. the
+   corner is that of the shader of the card, which is a part of its long side */
+.stage {
+  --card-w: calc(var(--s) * 0.48);
+}
+
+.card {
+  aspect-ratio: 100 / 66;
+  border-radius: calc(var(--card-w) * 0.0395);
+}

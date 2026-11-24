@@ -1,0 +1,33 @@
+/* the dots are the lines of this screen */
+.tube::before {
+  background: none;
+}
+
+/* the page text stays for screen readers. the canvas shows it as dots */
+.boot,
+.live,
+.idle {
+  opacity: 0;
+}
+
+/* the picture keeps its shape on a screen of another shape, so the dots stay round */
+.dots,
+.glow {
+  position: absolute;
+  inset: 0;
+  width: 94%;
+  aspect-ratio: 16 / 10;
+  margin: auto;
+}
+
+/* each pixel of the canvas is one round dot. the size of the mask is one pixel of the canvas */
+.dots {
+  image-rendering: pixelated;
+  -webkit-mask: radial-gradient(circle, #000 50%, transparent 64%) 0 0 / calc(100% / 160) calc(100% / 100);
+  mask: radial-gradient(circle, #000 50%, transparent 64%) 0 0 / calc(100% / 160) calc(100% / 100);
+}
+
+.glow {
+  filter: blur(calc(var(--s) * 0.007));
+  opacity: 0.75;
+}

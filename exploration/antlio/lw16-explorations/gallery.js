@@ -1,4 +1,4 @@
-import { groups, studies } from './studies.js?v=20'
+import { groups, studies } from './studies.js?v=21'
 
 const grid = document.querySelector('#studies')
 const filters = document.querySelector('#filters')

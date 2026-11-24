@@ -1,0 +1,61 @@
+/* the scene covers the page and the bar of the mix */
+.claim {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: #050506;
+  font-family: var(--sans);
+}
+
+.claim canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  outline: 0;
+}
+
+.claim-key {
+  position: absolute;
+  bottom: 9%;
+  left: 50%;
+  translate: -50% 0;
+  min-width: 13.5em;
+  padding: 0.85em 1.5em;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 99px;
+  background: rgb(255 255 255 / 0.07);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+  color: #f1efec;
+  font: 500 15px / 1.2 var(--sans);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    opacity 0.5s,
+    scale 0.15s;
+}
+
+.claim-key:active {
+  scale: 0.98;
+}
+
+.claim-key:focus-visible {
+  outline: 2px solid #f1efec;
+  outline-offset: 3px;
+}
+
+.claim-key[aria-disabled='true'] {
+  cursor: default;
+}
+
+.claim-key[data-done] {
+  opacity: 0;
+  pointer-events: none;
+}
