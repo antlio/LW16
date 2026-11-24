@@ -39,7 +39,7 @@ const TIMES = { lid: [0, 1.1], light: [0.3, 1.1] }
 const isScreenUnder = new URL(import.meta.url).searchParams.has('under')
 // the screen is the cell of the mark on the inner side of the lid: only glass, with pad of
 // paper around it. bulge is how round the glass is. picture is the size of what it shows,
-// in pixels
+// in pixels, and lines is how many lines the tube has
 const SCREEN = {
   ratio: 16 / 10,
   pad: 0.02,
@@ -47,6 +47,7 @@ const SCREEN = {
   bulge: 0.22,
   picture: { w: 800, h: 500 },
   ink: '#e9f0ea',
+  lines: 110,
 }
 // the slot is a line in the paper, this far under the glass, in the middle of the paper
 // that the cell has there. depth is the part of the height of the card that goes into it
@@ -55,8 +56,9 @@ const SLOT = { w: 0.7, depth: 0.55, under: 0.06 }
 const GLOBE = { tilt: 0.38, turn: 0.35, parallels: [-60, -40, -20, 0, 20, 40, 60] }
 // the way of the card goes from 0, in the pocket, to 1, at the end of the slot. a card that
 // is let go after seatFrom goes in. a card in the slot that is pulled back before outAt
-// comes out, and the screen goes off
-const WAY = { seatFrom: 0.72, outAt: 0.88, high: 0.05 }
+// comes out, and the screen goes off. in the first part of its way, to lift, the card only
+// comes straight up out of its pocket, so it does not go under the sheet
+const WAY = { seatFrom: 0.72, outAt: 0.88, high: 0.05, lift: 0.06 }
 // fast, with a small overshoot when the card comes back to the pocket
 const SPRING = { stiffness: 420, damping: 34 }
 // a press on the box that does not open it: the box goes up, and its lid opens by a small angle
@@ -94,7 +96,21 @@ const NOTE_FOIL = { bands: 2.4, color: 0.7 }
 // the light goes over the closed box once in this many seconds
 const SWEEP_SECONDS = 4.2
 const SKY_LIGHT = 0.32
-const LIGHTS = { key: 11, under: 2.5, top: 28, sweep: 1.6, mark: 1.2, open: 0.25, arrow: 1.8 }
+const LIGHTS = {
+  key: 11,
+  under: 2.5,
+  top: 28,
+  sweep: 1.6,
+  mark: 1.2,
+  open: 0.25,
+  arrow: 1.8,
+  blast: 2.6,
+}
+// when the card goes in, a blast goes out from the slot: a ring of the marks of the table
+// are lights for a moment, then the next ring. a ring is as wide as a row of the table.
+// speed is rings in a second, and rings is how many there are to the far corner. dark is
+// the part of the marks that stay dark
+const BLAST = { speed: 14, rings: 15, dark: 0.15 }
 const pageCard = document.getElementById('card')
 const isMotionReduced = matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -147,7 +163,8 @@ const cellNumber = (column, row) =>
   Math.abs((Math.sin(column * 127.1 + row * 311.7) * 43758.5453) % 1)
 
 // the table of the lid: the lines of its cells, a number for each row, a label for each
-// column, and rows of dots and blocks in place of the values. shade fills some cells
+// column, and rows of dots and blocks in place of the values. shade fills some cells. a
+// table with no line has only its numbers and its marks
 const drawTable = ({ ctx, line, ink, shade }) => {
   const { columns, rows, mark } = TABLE
   const rowHeight = LID_SIZE / rows
@@ -189,7 +206,7 @@ const drawTable = ({ ctx, line, ink, shade }) => {
       }
     }
   }
-  ctx.stroke()
+  if (line) ctx.stroke()
   ctx.restore()
 }
 
@@ -213,7 +230,7 @@ const lidColor = paint({
       y: LID_SIZE / 2,
       width: 200,
       line: 6,
-      color: 'rgb(214 208 200 / 0.8)',
+      color: 'rgb(62 207 142 / 0.75)',
     })
   },
 })
@@ -235,15 +252,28 @@ const lidGlow = paint({
   draw: (ctx) => {
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, LID_SIZE, LID_SIZE)
-    strokeMark({
-      ctx,
-      x: LID_SIZE / 2,
-      y: LID_SIZE / 2,
-      width: 200,
-      line: 4,
-      color: '#fff',
-      glow: 12,
-    })
+    // the light of the mark is green in its middle, with the colors of foil at its edge. the
+    // colors go around the middle of the mark, which is 109 wide and 113 high. three lines
+    // with little color, each less wide than the one under it, make the edge soft. a black
+    // line takes the colors out of the middle, so the green there stays green
+    const foil = ctx.createConicGradient(0.6, 54.5, 56.5)
+    for (const [at, color] of [
+      '#ff3d9a',
+      '#ffc23d',
+      '#3dffd0',
+      '#3d8bff',
+      '#b55dff',
+      '#ff3d9a',
+    ].entries()) {
+      foil.addColorStop(at / 5, color)
+    }
+    ctx.globalAlpha = 0.3
+    for (const line of [24, 17, 11]) {
+      strokeMark({ ctx, x: LID_SIZE / 2, y: LID_SIZE / 2, width: 200, line, color: foil })
+    }
+    ctx.globalAlpha = 1
+    strokeMark({ ctx, x: LID_SIZE / 2, y: LID_SIZE / 2, width: 200, line: 8, color: '#000' })
+    strokeMark({ ctx, x: LID_SIZE / 2, y: LID_SIZE / 2, width: 200, line: 5, color: '#3ecf8e' })
   },
 })
 
@@ -304,7 +334,10 @@ const lidInsideGlow = paint({
     ctx.fillRect(0, 0, LID_SIZE, LID_SIZE)
     ctx.translate(LID_SIZE, LID_SIZE)
     ctx.rotate(Math.PI)
-    if (isScreenUnder) fillArrow(ctx, '#fff')
+    // the lights of the lid are two kinds, and each has a color of its own in this picture:
+    // green for the marks of the table, and red for the arrow
+    drawTable({ ctx, line: 0, ink: '#0f0', shade: '#000' })
+    if (isScreenUnder) fillArrow(ctx, '#f00')
   },
 })
 
@@ -460,7 +493,6 @@ const drawNote = (ctx) => {
   ctx.fillText('LW16', left, 212)
   ctx.font = '400 32px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif'
   ctx.fillText('One launch a day, 6 to 10 December.', left, 272)
-  ctx.fillText('Put the card in the reader.', left, 316)
 }
 
 const sheetColor = paint({
@@ -545,7 +577,7 @@ const lidFront = new THREE.MeshStandardMaterial({
   bumpMap: textureOf(lidHeight, false),
   bumpScale: 8,
   roughness: 0.7,
-  emissive: 0xfff3e2,
+  emissive: 0xffffff,
   emissiveMap: textureOf(lidGlow),
   emissiveIntensity: 0,
 })
@@ -556,8 +588,30 @@ const lidBack = new THREE.MeshStandardMaterial({
   roughness: 0.7,
   emissive: 0x3ecf8e,
   emissiveMap: textureOf(lidInsideGlow),
-  emissiveIntensity: 0,
 })
+// how much light the arrow has, and the blast: the ring it is at, and how much light it has
+const lidLight = { arrow: { value: 0 }, blast: { value: new THREE.Vector2() } }
+lidBack.onBeforeCompile = (shader) => {
+  shader.uniforms.uArrow = lidLight.arrow
+  shader.uniforms.uBlast = lidLight.blast
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', '#include <common>\nuniform float uArrow;\nuniform vec2 uBlast;')
+    .replace(
+      '#include <emissivemap_fragment>',
+      /* glsl */ `vec4 lights = texture2D(emissiveMap, vEmissiveMapUv);
+      // two marks next to each other are one light, and all of it is in one ring
+      vec2 marks = vec2(${(LID_SIZE / 26).toFixed(1)}, ${TABLE.rows}.);
+      vec2 mark = floor(vEmissiveMapUv * marks);
+      // the picture is turned, so the slot is this far down it
+      vec2 slot = vec2(.5, ${(1 - SLOT_MOUTH / BOX.side).toFixed(3)});
+      float behind = floor(uBlast.x) - floor(distance((mark + .5) / marks, slot) * ${TABLE.rows}.);
+      // the first ring of the blast has all its light, and the two rings after it have less
+      float strength = behind == 0. ? 1. : behind == 1. ? .7 : behind == 2. ? .4 : 0.;
+      float isLit = step(${BLAST.dark.toFixed(2)}, fract(sin(dot(mark, vec2(127.1, 311.7))) * 43758.5453));
+      float fade = max(1. - pow(uBlast.x / ${BLAST.rings}., 2.), 0.);
+      totalEmissiveRadiance *= lights.r * uArrow + lights.g * strength * isLit * fade * uBlast.y;`
+    )
+}
 
 const solid = (geometry, material) => {
   const mesh = new THREE.Mesh(geometry, material)
@@ -899,16 +953,17 @@ const glass = new THREE.Mesh(
         // band on its upper part
         vec2 band = (vUv - vec2(.5, .84)) / vec2(.4, .1);
         color += vec3(.011, .011, .01) * exp(-dot(band, band));
-        // the picture is larger at the middle of the round glass, and its colors are a
-        // little apart
+        // the picture is larger at the middle of the round glass. its three colors are apart,
+        // and more so at the sides, so a thin line has a little of each color at its edges
         vec2 place = fromMiddle * (1. + away * ${SCREEN.bulge.toFixed(2)}) + .5;
-        vec2 apart = vec2(.001, 0.) + fromMiddle * .003;
+        vec2 apart = vec2(.0018, .0008) + fromMiddle * .006;
         vec4 warm = texture2D(uPicture, place + apart);
         vec4 middle = texture2D(uPicture, place);
         vec4 cold = texture2D(uPicture, place - apart);
-        vec3 picture = vec3(warm.r * warm.a, middle.g * middle.a, cold.b * cold.a) * 1.4;
-        // the lines of the tube: one line for each 3 pixels of the window
-        color += picture * (.93 + .07 * sin(gl_FragCoord.y * 2.0944));
+        vec3 picture = vec3(warm.r * warm.a, middle.g * middle.a, cold.b * cold.a) * 1.8;
+        // the lines of the tube go across the picture, and they bend with the glass. they are
+        // parts of the picture, so they are the same in a window of any size
+        color += picture * (.6 + .4 * sin(place.y * ${(SCREEN.lines * Math.PI * 2).toFixed(1)}));
         // the sides of the round glass turn away, and its edge is under the paper, in
         // shade. a thin line of light is around it
         color *= 1. - away * 1.1;
@@ -969,7 +1024,8 @@ const TRACK = {
   z: BOX.depth / 2 + 0.011,
 }
 // the part of the way where the top of the card is on the mouth of the slot
-const MOUTH_AT = (SLOT_MOUTH_Y - CARD.h / 2 - TRACK.rest) / (TRACK.seat - TRACK.rest)
+const MOUTH_AT =
+  WAY.lift + ((1 - WAY.lift) * (SLOT_MOUTH_Y - CARD.h / 2 - TRACK.rest)) / (TRACK.seat - TRACK.rest)
 
 let step = 'box'
 let stepAt = 0
@@ -984,6 +1040,8 @@ let isSeatWanted = false
 let grab = null
 let isReaderOn = false
 let lastSeconds = 0
+// when the card went into the slot. before that, no blast is on its way
+let blastAt = -99
 
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
@@ -1099,11 +1157,14 @@ const draw = (now) => {
   if (isCardIn !== isReaderOn) {
     isReaderOn = isCardIn
     pageCard.click()
-    if (isCardIn) playCardIn()
-    else playCardOut()
+    if (isCardIn) {
+      playCardIn()
+      blastAt = seconds
+    } else playCardOut()
   }
   glow.screen += ((isReaderOn ? 1 : 0) - glow.screen) * HOVER.speed
-  lidBack.emissiveIntensity = LIGHTS.arrow * glow.screen
+  lidLight.arrow.value = LIGHTS.arrow * glow.screen
+  lidLight.blast.value.set((seconds - blastAt) * BLAST.speed, isMotionReduced ? 0 : LIGHTS.blast)
   if (step === 'open') {
     drawScreen({ seconds, on: glow.screen, isCardIn: isReaderOn })
     screenTexture.needsUpdate = true
@@ -1116,14 +1177,14 @@ const draw = (now) => {
   cardPlace
     .set(
       0,
-      TRACK.rest + (TRACK.seat - TRACK.rest) * way,
+      TRACK.rest + (TRACK.seat - TRACK.rest) * span(way, [WAY.lift, 1]),
       TRACK.pocketZ +
-        (TRACK.z - TRACK.pocketZ) * ease(span(way, [0, 0.15])) +
+        (TRACK.z - TRACK.pocketZ) * ease(span(way, [0, WAY.lift])) +
         Math.sin(span(way, [0, MOUTH_AT]) * Math.PI) * WAY.high
     )
     .applyMatrix4(box.matrixWorld)
   card.position.copy(cardPlace)
-  card.rotation.set(box.rotation.x, 0, (Math.PI / 2) * (1 - ease(span(way, [0.03, 0.4]))))
+  card.rotation.set(box.rotation.x, 0, (Math.PI / 2) * (1 - ease(span(way, [WAY.lift, 0.4]))))
 
   // the light has a place in the scene, so it goes over the foil as the card turns. after
   // the first move of the pointer, the light is under the pointer, on the card or off it

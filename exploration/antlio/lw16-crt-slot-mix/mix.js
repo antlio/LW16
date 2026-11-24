@@ -5,11 +5,11 @@ const STARTS = {
     sheet: '../lw16-crt-slot-deal/claim.css?v=5',
   },
   boxreader: {
-    script: '../lw16-crt-slot-deal/box3d-screen.js?v=21',
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=28',
     sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=2',
   },
   boxunder: {
-    script: '../lw16-crt-slot-deal/box3d-screen.js?v=21&under',
+    script: '../lw16-crt-slot-deal/box3d-screen.js?v=28&under',
     sheet: '../lw16-crt-slot-deal/box3d-tap.css?v=2',
   },
 }
